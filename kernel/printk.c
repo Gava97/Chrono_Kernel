@@ -313,14 +313,6 @@ static int log_buf_get_len(void)
 }
 
 /*
- * Clears the ring-buffer
- */
-void log_buf_clear(void)
-{
-	logged_chars = 0;
-}
-
-/*
  * Copy a range of characters from the log buffer.
  */
 int log_buf_copy(char *dest, int idx, int len)
@@ -337,8 +329,8 @@ int log_buf_copy(char *dest, int idx, int len)
 	if (idx < 0 || idx >= max) {
 		ret = -1;
 	} else {
-		if (len > max - idx)
-			len = max - idx;
+		if (len > max)
+			len = max;
 		ret = len;
 		idx += (log_end - max);
 		while (len-- > 0)
