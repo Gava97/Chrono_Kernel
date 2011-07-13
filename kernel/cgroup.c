@@ -2150,14 +2150,14 @@ out_free_group_list:
 	return retval;
 }
 
-static int cgroup_allow_attach(struct cgroup *cgrp, struct task_struct *tsk)
+static int cgroup_allow_attach(struct cgroup *cgrp, struct cgroup_taskset *tset)
 {
 	struct cgroup_subsys *ss;
 	int ret;
 
 	for_each_subsys(cgrp->root, ss) {
 		if (ss->allow_attach) {
-			ret = ss->allow_attach(cgrp, tsk);
+			ret = ss->allow_attach(cgrp, tset);
 			if (ret)
 				return ret;
 		} else {
@@ -2199,10 +2199,19 @@ retry_find_task:
 		if (cred->euid &&
 		    cred->euid != tcred->uid &&
 		    cred->euid != tcred->suid) {
-			rcu_read_unlock();
-			ret = -EACCES;
-			goto out_unlock_cgroup;
-		    }
+			/*
+			 * if the default permission check fails, give each
+			 * cgroup a chance to extend the permission check
+			 */
+			struct cgroup_taskset tset = { };
+			tset.single.task = tsk;
+			tset.single.cgrp = cgrp;
+			ret = cgroup_allow_attach(cgrp, &tset);
+			if (ret) {
+				rcu_read_unlock();
+				goto out_unlock_cgroup;
+			}
+		}
 	} else
 		tsk = current;
 
