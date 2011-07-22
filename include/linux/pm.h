@@ -461,8 +461,8 @@ struct dev_pm_info {
 	unsigned long		active_jiffies;
 	unsigned long		suspended_jiffies;
 	unsigned long		accounting_timestamp;
-	void			*subsys_data;  /* Owned by the subsystem. */
 #endif
+	void			*subsys_data;  /* Owned by the subsystem. */
 };
 
 extern void update_pm_runtime_accounting(struct device *dev);
@@ -472,7 +472,7 @@ extern void update_pm_runtime_accounting(struct device *dev);
  * hibernation, system resume and during runtime PM transitions along with
  * subsystem-level and driver-level callbacks.
  */
-struct dev_power_domain {
+struct dev_pm_domain {
 	struct dev_pm_ops	ops;
 };
 
