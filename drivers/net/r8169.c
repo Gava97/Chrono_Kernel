@@ -666,8 +666,24 @@ struct rtl8169_private {
 	struct rtl8169_counters counters;
 	u32 saved_wolopts;
 
+<<<<<<< HEAD
 	const struct firmware *fw;
 #define RTL_FIRMWARE_UNKNOWN	ERR_PTR(-EAGAIN);
+=======
+	struct rtl_fw {
+		const struct firmware *fw;
+
+#define RTL_VER_SIZE		32
+
+		char version[RTL_VER_SIZE];
+
+		struct rtl_fw_phy_action {
+			__le32 *code;
+			size_t size;
+		} phy_action;
+	} *rtl_fw;
+#define RTL_FIRMWARE_UNKNOWN	ERR_PTR(-EAGAIN)
+>>>>>>> d3ec484... Merge branch 'for-linus' of git://git.kernel.org/pub/scm/linux/kernel/git/jikos/trivial
 };
 
 MODULE_AUTHOR("Realtek and the Linux r8169 crew <netdev@vger.kernel.org>");
