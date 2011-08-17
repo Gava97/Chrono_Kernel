@@ -731,6 +731,9 @@ extern int __build_bug_on_failed;
 struct sysinfo;
 extern int do_sysinfo(struct sysinfo *info);
 
+/* To identify board information in panic logs, set this */
+extern char *mach_panic_string;
+
 #endif /* __KERNEL__ */
 
 #define SI_LOAD_SHIFT	16
