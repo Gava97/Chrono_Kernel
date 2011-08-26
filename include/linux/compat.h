@@ -438,6 +438,7 @@ asmlinkage long compat_sys_ppoll(struct pollfd __user *ufds,
 				 struct compat_timespec __user *tsp,
 				 const compat_sigset_t __user *sigmask,
 				 compat_size_t sigsetsize);
+
 #if (defined(CONFIG_NFSD) || defined(CONFIG_NFSD_MODULE)) && \
 	!defined(CONFIG_NFSD_DEPRECATED)
 union compat_nfsctl_res;
