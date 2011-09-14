@@ -18,6 +18,29 @@ static DEFINE_MUTEX(irq_domain_mutex);
  */
 void irq_domain_add(struct irq_domain *domain)
 {
+	struct irq_data *d;
+	int hwirq;
+
+	/*
+	 * This assumes that the irq_domain owner has already allocated
+	 * the irq_descs.  This block will be removed when support for dynamic
+	 * allocation of irq_descs is added to irq_domain.
+	 */
+	for (hwirq = 0; hwirq < domain->nr_irq; hwirq++) {
+		d = irq_get_irq_data(irq_domain_to_irq(domain, hwirq));
+		if (!d) {
+			WARN(1, "error: assigning domain to non existant irq_desc");
+			return;
+		}
+		if (d->domain) {
+			/* things are broken; just report, don't clean up */
+			WARN(1, "error: irq_desc already assigned to a domain");
+			return;
+		}
+		d->domain = domain;
+		d->hwirq = hwirq;
+	}
+
 	mutex_lock(&irq_domain_mutex);
 	list_add(&domain->list, &irq_domain_list);
 	mutex_unlock(&irq_domain_mutex);
