@@ -56,7 +56,10 @@ void cpu_idle(void)
 	/* endless idle loop with no priority at all */
 	while (1) {
 		tick_nohz_idle_enter();
+<<<<<<< HEAD
 		rcu_idle_enter();
+=======
+>>>>>>> 280f067... nohz: Separate out irq exit and idle loop dyntick logic
 		while (!need_resched()) {
 			local_irq_disable();
 			stop_critical_timings();
@@ -64,7 +67,10 @@ void cpu_idle(void)
 			local_irq_enable();
 			start_critical_timings();
 		}
+<<<<<<< HEAD
 		rcu_idle_exit();
+=======
+>>>>>>> 280f067... nohz: Separate out irq exit and idle loop dyntick logic
 		tick_nohz_idle_exit();
 		preempt_enable_no_resched();
 		schedule();

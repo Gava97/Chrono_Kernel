@@ -96,13 +96,22 @@ void cpu_idle(void)
 
 	while(1) {
 		tick_nohz_idle_enter();
+<<<<<<< HEAD
 		rcu_idle_enter();
+=======
+>>>>>>> 280f067... nohz: Separate out irq exit and idle loop dyntick logic
 
 		while (!need_resched() && !cpu_is_offline(cpu))
 			sparc64_yield(cpu);
 
+<<<<<<< HEAD
 		rcu_idle_exit();
 		tick_nohz_idle_exit();
+=======
+		tick_nohz_idle_exit();
+
+		preempt_enable_no_resched();
+>>>>>>> 280f067... nohz: Separate out irq exit and idle loop dyntick logic
 
 #ifdef CONFIG_HOTPLUG_CPU
 		if (cpu_is_offline(cpu)) {

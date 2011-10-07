@@ -246,10 +246,15 @@ void default_idle(void)
 			schedule();
 
 		tick_nohz_idle_enter();
+<<<<<<< HEAD
 		rcu_idle_enter();
 		nsecs = disable_timer();
 		idle_sleep(nsecs);
 		rcu_idle_exit();
+=======
+		nsecs = disable_timer();
+		idle_sleep(nsecs);
+>>>>>>> 280f067... nohz: Separate out irq exit and idle loop dyntick logic
 		tick_nohz_idle_exit();
 	}
 }

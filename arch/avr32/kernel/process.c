@@ -35,12 +35,21 @@ void cpu_idle(void)
 	/* endless idle loop with no priority at all */
 	while (1) {
 		tick_nohz_idle_enter();
+<<<<<<< HEAD
 		rcu_idle_enter();
 		while (!need_resched())
 			cpu_idle_sleep();
 		rcu_idle_exit();
 		tick_nohz_idle_exit();
 		schedule_preempt_disabled();
+=======
+		while (!need_resched())
+			cpu_idle_sleep();
+		tick_nohz_idle_exit();
+		preempt_enable_no_resched();
+		schedule();
+		preempt_disable();
+>>>>>>> 280f067... nohz: Separate out irq exit and idle loop dyntick logic
 	}
 }
 

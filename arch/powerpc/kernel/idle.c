@@ -63,9 +63,12 @@ void cpu_idle(void)
 	set_thread_flag(TIF_POLLING_NRFLAG);
 	while (1) {
 		tick_nohz_idle_enter();
+<<<<<<< HEAD
 		if (!idle_uses_rcu)
 			rcu_idle_enter();
 
+=======
+>>>>>>> 280f067... nohz: Separate out irq exit and idle loop dyntick logic
 		while (!need_resched() && !cpu_should_die()) {
 			ppc64_runlatch_off();
 
@@ -102,11 +105,17 @@ void cpu_idle(void)
 
 		HMT_medium();
 		ppc64_runlatch_on();
+<<<<<<< HEAD
 		if (!idle_uses_rcu)
 			rcu_idle_exit();
 		tick_nohz_idle_exit();
 		if (cpu_should_die()) {
 			sched_preempt_enable_no_resched();
+=======
+		tick_nohz_idle_exit();
+		preempt_enable_no_resched();
+		if (cpu_should_die())
+>>>>>>> 280f067... nohz: Separate out irq exit and idle loop dyntick logic
 			cpu_die();
 		}
 		schedule_preempt_disabled();

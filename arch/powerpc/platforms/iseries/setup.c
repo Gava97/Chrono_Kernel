@@ -563,7 +563,10 @@ static void iseries_shared_idle(void)
 {
 	while (1) {
 		tick_nohz_idle_enter();
+<<<<<<< HEAD
 		rcu_idle_enter();
+=======
+>>>>>>> 280f067... nohz: Separate out irq exit and idle loop dyntick logic
 		while (!need_resched() && !hvlpevent_is_pending()) {
 			local_irq_disable();
 			ppc64_runlatch_off();
@@ -577,7 +580,10 @@ static void iseries_shared_idle(void)
 		}
 
 		ppc64_runlatch_on();
+<<<<<<< HEAD
 		rcu_idle_exit();
+=======
+>>>>>>> 280f067... nohz: Separate out irq exit and idle loop dyntick logic
 		tick_nohz_idle_exit();
 
 		if (hvlpevent_is_pending())
@@ -593,7 +599,10 @@ static void iseries_dedicated_idle(void)
 
 	while (1) {
 		tick_nohz_idle_enter();
+<<<<<<< HEAD
 		rcu_idle_enter();
+=======
+>>>>>>> 280f067... nohz: Separate out irq exit and idle loop dyntick logic
 		if (!need_resched()) {
 			while (!need_resched()) {
 				ppc64_runlatch_off();
@@ -610,9 +619,16 @@ static void iseries_dedicated_idle(void)
 		}
 
 		ppc64_runlatch_on();
+<<<<<<< HEAD
 		rcu_idle_exit();
 		tick_nohz_idle_exit();
 		schedule_preempt_disabled();
+=======
+		tick_nohz_idle_exit();
+		preempt_enable_no_resched();
+		schedule();
+		preempt_disable();
+>>>>>>> 280f067... nohz: Separate out irq exit and idle loop dyntick logic
 	}
 }
 

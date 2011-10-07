@@ -104,10 +104,15 @@ void cpu_idle(void)
 			idle = default_idle;
 
 		tick_nohz_idle_enter();
+<<<<<<< HEAD
 		rcu_idle_enter();
 		while (!need_resched())
 			idle();
 		rcu_idle_exit();
+=======
+		while (!need_resched())
+			idle();
+>>>>>>> 280f067... nohz: Separate out irq exit and idle loop dyntick logic
 		tick_nohz_idle_exit();
 
 		schedule_preempt_disabled();
