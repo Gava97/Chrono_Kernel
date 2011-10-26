@@ -318,7 +318,6 @@ void alarm_init(struct alarm *alarm, enum alarmtimer_type type,
 		enum alarmtimer_restart (*function)(struct alarm *, ktime_t))
 {
 	timerqueue_init(&alarm->node);
-	alarm->period = ktime_set(0, 0);
 	alarm->function = function;
 	alarm->type = type;
 	alarm->state = ALARMTIMER_STATE_INACTIVE;
@@ -328,9 +327,8 @@ void alarm_init(struct alarm *alarm, enum alarmtimer_type type,
  * alarm_start - Sets an alarm to fire
  * @alarm: ptr to alarm to set
  * @start: time to run the alarm
- * @period: period at which the alarm will recur
  */
-void alarm_start(struct alarm *alarm, ktime_t start, ktime_t period)
+void alarm_start(struct alarm *alarm, ktime_t start)
 {
 	struct alarm_base *base = &alarm_bases[alarm->type];
 	unsigned long flags;
@@ -339,26 +337,53 @@ void alarm_start(struct alarm *alarm, ktime_t start, ktime_t period)
 	if (alarmtimer_active(alarm))
 		alarmtimer_remove(base, alarm);
 	alarm->node.expires = start;
-	alarm->period = period;
 	alarmtimer_enqueue(base, alarm);
 	spin_unlock_irqrestore(&base->lock, flags);
 }
 
 /**
- * alarm_cancel - Tries to cancel an alarm timer
+ * alarm_try_to_cancel - Tries to cancel an alarm timer
  * @alarm: ptr to alarm to be canceled
+ *
+ * Returns 1 if the timer was canceled, 0 if it was not running,
+ * and -1 if the callback was running
  */
-void alarm_cancel(struct alarm *alarm)
+int alarm_try_to_cancel(struct alarm *alarm)
 {
 	struct alarm_base *base = &alarm_bases[alarm->type];
 	unsigned long flags;
-
+	int ret = -1;
 	spin_lock_irqsave(&base->lock, flags);
-	if (alarmtimer_is_queued(alarm))
+
+	if (alarmtimer_callback_running(alarm))
+		goto out;
+
+	if (alarmtimer_is_queued(alarm)) {
 		alarmtimer_remove(base, alarm);
+		ret = 1;
+	} else
+		ret = 0;
+out:
 	spin_unlock_irqrestore(&base->lock, flags);
+	return ret;
 }
 
+
+/**
+ * alarm_cancel - Spins trying to cancel an alarm timer until it is done
+ * @alarm: ptr to alarm to be canceled
+ *
+ * Returns 1 if the timer was canceled, 0 if it was not active.
+ */
+int alarm_cancel(struct alarm *alarm)
+{
+	for (;;) {
+		int ret = alarm_try_to_cancel(alarm);
+		if (ret >= 0)
+			return ret;
+		cpu_relax();
+	}
+}
 
 
 u64 alarm_forward(struct alarm *alarm, ktime_t now, ktime_t interval)
@@ -392,8 +417,36 @@ u64 alarm_forward(struct alarm *alarm, ktime_t now, ktime_t interval)
 	return overrun;
 }
 
+u64 alarm_forward(struct alarm *alarm, ktime_t now, ktime_t interval)
+{
+	u64 overrun = 1;
+	ktime_t delta;
 
+	delta = ktime_sub(now, alarm->node.expires);
 
+	if (delta.tv64 < 0)
+		return 0;
+
+	if (unlikely(delta.tv64 >= interval.tv64)) {
+		s64 incr = ktime_to_ns(interval);
+
+		overrun = ktime_divns(delta, incr);
+
+		alarm->node.expires = ktime_add_ns(alarm->node.expires,
+							incr*overrun);
+
+		if (alarm->node.expires.tv64 > now.tv64)
+			return overrun;
+		/*
+		 * This (and the ktime_add() below) is the
+		 * correction for exact:
+		 */
+		overrun++;
+	}
+
+	alarm->node.expires = ktime_add(alarm->node.expires, interval);
+	return overrun;
+}
 
 /**
  * clock2alarm - helper that converts from clockid to alarmtypes
@@ -418,13 +471,15 @@ static enum alarmtimer_restart alarm_handle_timer(struct alarm *alarm,
 							ktime_t now)
 {
 	struct k_itimer *ptr = container_of(alarm, struct k_itimer,
-						it.alarmtimer);
+						it.alarm.alarmtimer);
 	if (posix_timer_event(ptr, 0) != 0)
 		ptr->it_overrun++;
 
 	/* Re-add periodic timers */
-	if (alarm->period.tv64) {
-		ptr->it_overrun += alarm_forward(alarm, now, alarm->period);
+
+	if (ptr->it.alarm.interval.tv64) {
+		ptr->it_overrun += alarm_forward(alarm, now,
+						ptr->it.alarm.interval);
 		return ALARMTIMER_RESTART;
 	}
 	return ALARMTIMER_NORESTART;
@@ -484,7 +539,7 @@ static int alarm_timer_create(struct k_itimer *new_timer)
 
 	type = clock2alarm(new_timer->it_clock);
 	base = &alarm_bases[type];
-	alarm_init(&new_timer->it.alarmtimer, type, alarm_handle_timer);
+	alarm_init(&new_timer->it.alarm.alarmtimer, type, alarm_handle_timer);
 	return 0;
 }
 
@@ -501,9 +556,9 @@ static void alarm_timer_get(struct k_itimer *timr,
 	memset(cur_setting, 0, sizeof(struct itimerspec));
 
 	cur_setting->it_interval =
-			ktime_to_timespec(timr->it.alarmtimer.period);
+			ktime_to_timespec(timr->it.alarm.interval);
 	cur_setting->it_value =
-			ktime_to_timespec(timr->it.alarmtimer.node.expires);
+		ktime_to_timespec(timr->it.alarm.alarmtimer.node.expires);
 	return;
 }
 
@@ -518,7 +573,9 @@ static int alarm_timer_del(struct k_itimer *timr)
 	if (!rtcdev)
 		return -ENOTSUPP;
 
-	alarm_cancel(&timr->it.alarmtimer);
+	if (alarm_try_to_cancel(&timr->it.alarm.alarmtimer) < 0)
+		return TIMER_RETRY;
+
 	return 0;
 }
 
@@ -542,12 +599,13 @@ static int alarm_timer_set(struct k_itimer *timr, int flags,
 		alarm_timer_get(timr, old_setting);
 
 	/* If the timer was already set, cancel it */
-	alarm_cancel(&timr->it.alarmtimer);
+	if (alarm_try_to_cancel(&timr->it.alarm.alarmtimer) < 0)
+		return TIMER_RETRY;
 
 	/* start the timer */
-	alarm_start(&timr->it.alarmtimer,
-			timespec_to_ktime(new_setting->it_value),
-			timespec_to_ktime(new_setting->it_interval));
+	timr->it.alarm.interval = timespec_to_ktime(new_setting->it_interval);
+	alarm_start(&timr->it.alarm.alarmtimer,
+			timespec_to_ktime(new_setting->it_value));
 	return 0;
 }
 
@@ -580,7 +638,7 @@ static int alarmtimer_do_nsleep(struct alarm *alarm, ktime_t absexp)
 	alarm->data = (void *)current;
 	do {
 		set_current_state(TASK_INTERRUPTIBLE);
-		alarm_start(alarm, absexp, ktime_set(0, 0));
+		alarm_start(alarm, absexp);
 		if (likely(alarm->data))
 			schedule();
 
