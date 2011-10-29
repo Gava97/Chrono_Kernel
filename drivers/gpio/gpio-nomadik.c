@@ -59,6 +59,7 @@ struct nmk_gpio_chip {
 	u32 fwimsc;
 	u32 rimsc;
 	u32 fimsc;
+	u32 slpm;
 	u32 pull_up;
 	u32 lowemi;
 };
@@ -784,6 +785,8 @@ static int nmk_gpio_irq_set_type(struct irq_data *d, unsigned int type)
 	spin_unlock_irqrestore(&nmk_chip->lock, flags);
 	clk_disable(nmk_chip->clk);
 
+	clk_enable(nmk_chip->clk);
+	nmk_gpio_irq_unmask(d);
 	return 0;
 }
 
@@ -1083,10 +1086,20 @@ void nmk_gpio_wakeups_suspend(void)
 
 		clk_enable(chip->clk);
 
+		chip->rwimsc = readl(chip->addr + NMK_GPIO_RWIMSC);
+		chip->fwimsc = readl(chip->addr + NMK_GPIO_FWIMSC);
+
 		writel(chip->rwimsc & chip->real_wake,
 		       chip->addr + NMK_GPIO_RWIMSC);
 		writel(chip->fwimsc & chip->real_wake,
 		       chip->addr + NMK_GPIO_FWIMSC);
+
+		if (chip->sleepmode) {
+			chip->slpm = readl(chip->addr + NMK_GPIO_SLPC);
+
+			/* 0 -> wakeup enable */
+			writel(~chip->real_wake, chip->addr + NMK_GPIO_SLPC);
+		}
 
 		clk_disable(chip->clk);
 	}
@@ -1106,6 +1119,9 @@ void nmk_gpio_wakeups_resume(void)
 
 		writel(chip->rwimsc, chip->addr + NMK_GPIO_RWIMSC);
 		writel(chip->fwimsc, chip->addr + NMK_GPIO_FWIMSC);
+
+		if (chip->sleepmode)
+			writel(chip->slpm, chip->addr + NMK_GPIO_SLPC);
 
 		clk_disable(chip->clk);
 	}
