@@ -152,6 +152,7 @@ extern u64 timecounter_cyc2time(struct timecounter *tc,
  * @mult:		cycle to nanosecond multiplier
  * @shift:		cycle to nanosecond divisor (power of two)
  * @max_idle_ns:	max idle time permitted by the clocksource (nsecs)
+ * @maxadj		maximum adjustment value to mult (~11%)
  * @flags:		flags describing special properties
  * @vread:		vsyscall based read
  * @suspend:		suspend function for the clocksource, if necessary
@@ -174,6 +175,9 @@ struct clocksource {
 #define CLKSRC_FSYS_MMIO_SET(mmio, addr)      ((mmio) = (addr))
 #else
 #define CLKSRC_FSYS_MMIO_SET(mmio, addr)      do { } while (0)
+	u32 maxadj;
+#ifdef CONFIG_ARCH_CLOCKSOURCE_DATA
+	struct arch_clocksource_data archdata;
 #endif
 	const char *name;
 	struct list_head list;
