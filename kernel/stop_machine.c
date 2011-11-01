@@ -494,7 +494,7 @@ int __stop_machine(int (*fn)(void *), void *data, const struct cpumask *cpus)
 		 * early in boot before stop_machine() has been
 		 * initialized.
 		 */
- 		unsigned long flags;
+		unsigned long flags;
 		int ret;
 
 		WARN_ON_ONCE(smdata.num_threads != 1);
