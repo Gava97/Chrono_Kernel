@@ -25,6 +25,7 @@
  *
  *****************************************************************************/
 #include <linux/usb.h>
+#include <linux/export.h>
 #include "core.h"
 #include "wifi.h"
 #include "usb.h"

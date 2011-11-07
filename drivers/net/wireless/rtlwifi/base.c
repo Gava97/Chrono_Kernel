@@ -28,6 +28,7 @@
  *****************************************************************************/
 
 #include <linux/ip.h>
+#include <linux/module.h>
 #include "wifi.h"
 #include "rc.h"
 #include "base.h"

@@ -15,6 +15,7 @@
 #include <linux/slab.h>
 #include <linux/clk.h>
 #include <linux/regulator/consumer.h>
+#include <linux/module.h>
 
 #define PEN_DOWN_INTR	0
 #define RESET_DELAY	30

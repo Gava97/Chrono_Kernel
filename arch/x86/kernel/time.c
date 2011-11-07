@@ -12,6 +12,7 @@
 #include <linux/clockchips.h>
 #include <linux/interrupt.h>
 #include <linux/time.h>
+#include <linux/export.h>
 #include <linux/mca.h>
 
 #include <asm/vsyscall.h>

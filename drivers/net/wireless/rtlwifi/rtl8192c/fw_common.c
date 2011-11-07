@@ -28,6 +28,7 @@
  *****************************************************************************/
 
 #include <linux/firmware.h>
+#include <linux/export.h>
 #include "../wifi.h"
 #include "../pci.h"
 #include "../base.h"

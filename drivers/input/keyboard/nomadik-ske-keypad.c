@@ -20,6 +20,7 @@
 #include <linux/slab.h>
 #include <linux/clk.h>
 #include <linux/regulator/consumer.h>
+#include <linux/module.h>
 
 #include <plat/ske.h>
 #include <plat/gpio-nomadik.h>

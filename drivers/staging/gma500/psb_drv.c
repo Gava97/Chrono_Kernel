@@ -33,6 +33,7 @@
 #include <linux/notifier.h>
 #include <linux/spinlock.h>
 #include <linux/pm_runtime.h>
+#include <linux/module.h>
 #include <acpi/video.h>
 
 int drm_psb_debug;

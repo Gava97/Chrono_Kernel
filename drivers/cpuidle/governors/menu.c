@@ -21,6 +21,7 @@
 #include <linux/math64.h>
 #include <linux/cpu.h>
 #include <linux/sysfs.h>
+#include <linux/module.h>
 
 #define BUCKETS 12
 #define INTERVALS 8

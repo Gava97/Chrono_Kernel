@@ -17,6 +17,7 @@
 #include <linux/nl80211.h>
 #include <linux/pci.h>
 #include <linux/ath9k_platform.h>
+#include <linux/module.h>
 #include "ath9k.h"
 
 static DEFINE_PCI_DEVICE_TABLE(ath_pci_id_table) = {

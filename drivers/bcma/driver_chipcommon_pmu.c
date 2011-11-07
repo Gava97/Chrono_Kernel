@@ -9,6 +9,7 @@
  */
 
 #include "bcma_private.h"
+#include <linux/export.h>
 #include <linux/bcma/bcma.h>
 
 static void bcma_chipco_chipctl_maskset(struct bcma_drv_cc *cc,

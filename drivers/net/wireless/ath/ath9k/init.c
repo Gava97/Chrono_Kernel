@@ -16,6 +16,7 @@
 
 #include <linux/slab.h>
 #include <linux/ath9k_platform.h>
+#include <linux/module.h>
 
 #include "ath9k.h"
 
