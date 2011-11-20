@@ -18,6 +18,12 @@
 #include <linux/pm_runtime.h>
 #include <linux/platform_device.h>
 #include <linux/delay.h>
+<<<<<<< HEAD
+=======
+#include <linux/irq.h>
+#include <linux/bitrev.h>
+#include <linux/console.h>
+>>>>>>> 2d360fc... Merge branch 'pm-fixes' of git://git.kernel.org/pub/scm/linux/kernel/git/rafael/linux-pm
 #include <asm/system.h>
 #include <asm/io.h>
 #include <asm/tlbflush.h>
@@ -61,9 +67,8 @@ static int pd_power_down(struct generic_pm_domain *genpd)
 	return 0;
 }
 
-static int pd_power_up(struct generic_pm_domain *genpd)
+static int __pd_power_up(struct sh7372_pm_domain *sh7372_pd, bool do_resume)
 {
-	struct sh7372_pm_domain *sh7372_pd = to_sh7372_pd(genpd);
 	unsigned int mask = 1 << sh7372_pd->bit_shift;
 	unsigned int retry_count;
 	int ret = 0;
@@ -75,23 +80,37 @@ static int pd_power_up(struct generic_pm_domain *genpd)
 
 	for (retry_count = 2 * PSTR_RETRIES; retry_count; retry_count--) {
 		if (!(__raw_readl(SWUCR) & mask))
-			goto out;
+			break;
 		if (retry_count > PSTR_RETRIES)
 			udelay(PSTR_DELAY_US);
 		else
 			cpu_relax();
 	}
-	if (__raw_readl(SWUCR) & mask)
+	if (!retry_count)
 		ret = -EIO;
 
  out:
+<<<<<<< HEAD
 	pr_debug("sh7372 power domain up 0x%08x -> PSTR = 0x%08x\n",
 		 mask, __raw_readl(PSTR));
+=======
+	if (ret == 0 && sh7372_pd->resume && do_resume)
+		sh7372_pd->resume();
+>>>>>>> 2d360fc... Merge branch 'pm-fixes' of git://git.kernel.org/pub/scm/linux/kernel/git/rafael/linux-pm
 
 	return ret;
 }
 
+<<<<<<< HEAD
 static int pd_power_up_a3rv(struct generic_pm_domain *genpd)
+=======
+static int pd_power_up(struct generic_pm_domain *genpd)
+{
+	 return __pd_power_up(to_sh7372_pd(genpd), true);
+}
+
+static void sh7372_a4r_suspend(void)
+>>>>>>> 2d360fc... Merge branch 'pm-fixes' of git://git.kernel.org/pub/scm/linux/kernel/git/rafael/linux-pm
 {
 	int ret = pd_power_up(genpd);
 
@@ -133,6 +152,7 @@ void sh7372_init_pm_domain(struct sh7372_pm_domain *sh7372_pd)
 	genpd->stop_device = pm_clk_suspend;
 	genpd->start_device = pm_clk_resume;
 	genpd->active_wakeup = pd_active_wakeup;
+<<<<<<< HEAD
 
 	if (sh7372_pd == &sh7372_a4lc) {
 		genpd->power_off = pd_power_down_a4lc;
@@ -145,6 +165,11 @@ void sh7372_init_pm_domain(struct sh7372_pm_domain *sh7372_pd)
 		genpd->power_on = pd_power_up;
 	}
 	genpd->power_on(&sh7372_pd->genpd);
+=======
+	genpd->power_off = pd_power_down;
+	genpd->power_on = pd_power_up;
+	__pd_power_up(sh7372_pd, false);
+>>>>>>> 2d360fc... Merge branch 'pm-fixes' of git://git.kernel.org/pub/scm/linux/kernel/git/rafael/linux-pm
 }
 
 void sh7372_add_device_to_domain(struct sh7372_pm_domain *sh7372_pd,
@@ -179,11 +204,32 @@ struct sh7372_pm_domain sh7372_a3ri = {
 	.bit_shift = 8,
 };
 
+<<<<<<< HEAD
+=======
+struct sh7372_pm_domain sh7372_a3sp = {
+	.bit_shift = 11,
+	.gov = &sh7372_always_on_gov,
+	.no_debug = true,
+};
+
+static void sh7372_a3sp_init(void)
+{
+	/* serial consoles make use of SCIF hardware located in A3SP,
+	 * keep such power domain on if "no_console_suspend" is set.
+	 */
+	sh7372_a3sp.stay_on = !console_suspend_enabled;
+}
+
+>>>>>>> 2d360fc... Merge branch 'pm-fixes' of git://git.kernel.org/pub/scm/linux/kernel/git/rafael/linux-pm
 struct sh7372_pm_domain sh7372_a3sg = {
 	.bit_shift = 13,
 };
 
-#endif /* CONFIG_PM */
+#else /* !CONFIG_PM */
+
+static inline void sh7372_a3sp_init(void) {}
+
+#endif /* !CONFIG_PM */
 
 static void sh7372_enter_core_standby(void)
 {
@@ -263,6 +309,14 @@ void __init sh7372_pm_init(void)
 	__raw_writel(0x0000a501, DBGREG9);
 	__raw_writel(0x00000000, DBGREG1);
 
+<<<<<<< HEAD
+=======
+	/* do not convert A3SM, A3SP, A3SG, A4R power down into A4S */
+	__raw_writel(0, PDNSEL);
+
+	sh7372_a3sp_init();
+
+>>>>>>> 2d360fc... Merge branch 'pm-fixes' of git://git.kernel.org/pub/scm/linux/kernel/git/rafael/linux-pm
 	sh7372_suspend_init();
 	sh7372_cpuidle_init();
 }
