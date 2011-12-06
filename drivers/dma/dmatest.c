@@ -212,9 +212,18 @@ static unsigned int dmatest_verify(u8 **bufs, unsigned int start,
 	return error_count;
 }
 
-static void dmatest_callback(void *completion)
+/* poor man's completion - we want to use wait_event_freezable() on it */
+struct dmatest_done {
+	bool			done;
+	wait_queue_head_t	*wait;
+};
+
+static void dmatest_callback(void *arg)
 {
-	complete(completion);
+	struct dmatest_done *done = arg;
+
+	done->done = true;
+	wake_up_all(done->wait);
 }
 
 /*
@@ -233,7 +242,9 @@ static void dmatest_callback(void *completion)
  */
 static int dmatest_func(void *data)
 {
+	DECLARE_WAIT_QUEUE_HEAD_ONSTACK(done_wait);
 	struct dmatest_thread	*thread = data;
+	struct dmatest_done	done = { .wait = &done_wait };
 	struct dma_chan		*chan;
 	const char		*thread_name;
 	unsigned int		src_off, dst_off, len;
@@ -250,6 +261,7 @@ static int dmatest_func(void *data)
 	int			i;
 
 	thread_name = current->comm;
+	set_freezable();
 
 	ret = -ENOMEM;
 
@@ -303,8 +315,6 @@ static int dmatest_func(void *data)
 		struct dma_async_tx_descriptor *tx = NULL;
 		dma_addr_t dma_srcs[src_cnt];
 		dma_addr_t dma_dsts[dst_cnt];
-		struct completion cmp;
-		unsigned long tmo = msecs_to_jiffies(timeout);
 		u8 align = 0;
 
 		total_tests++;
@@ -387,9 +397,9 @@ static int dmatest_func(void *data)
 			continue;
 		}
 
-		init_completion(&cmp);
+		done.done = false;
 		tx->callback = dmatest_callback;
-		tx->callback_param = &cmp;
+		tx->callback_param = &done;
 		cookie = tx->tx_submit(tx);
 
 		if (dma_submit_error(cookie)) {
@@ -403,10 +413,20 @@ static int dmatest_func(void *data)
 		}
 		dma_async_issue_pending(chan);
 
-		tmo = wait_for_completion_timeout(&cmp, tmo);
+		wait_event_freezable_timeout(done_wait, done.done,
+					     msecs_to_jiffies(timeout));
+
 		status = dma_async_is_tx_complete(chan, cookie, NULL, NULL);
 
-		if (tmo == 0) {
+		if (!done.done) {
+			/*
+			 * We're leaving the timed out dma operation with
+			 * dangling pointer to done_wait.  To make this
+			 * correct, we'll need to allocate wait_done for
+			 * each test iteration and perform "who's gonna
+			 * free it this time?" dancing.  For now, just
+			 * leave it dangling.
+			 */
 			pr_warning("%s: #%u: test timed out\n",
 				   thread_name, total_tests - 1);
 			failed_tests++;

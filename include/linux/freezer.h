@@ -104,6 +104,29 @@ static inline int freezer_should_skip(struct task_struct *p)
 }
 
 /*
+ * These macros are intended to be used whenever you want allow a task that's
+ * sleeping in TASK_UNINTERRUPTIBLE or TASK_KILLABLE state to be frozen. Note
+ * that neither return any clear indication of whether a freeze event happened
+ * while in this function.
+ */
+
+/* Like schedule(), but should not block the freezer. */
+#define freezable_schedule()						\
+({									\
+	freezer_do_not_count();						\
+	schedule();							\
+	freezer_count();						\
+})
+
+/* Like schedule_timeout_killable(), but should not block the freezer. */
+#define freezable_schedule_timeout_killable(timeout)			\
+({									\
+	freezer_do_not_count();						\
+	schedule_timeout_killable(timeout);				\
+	freezer_count();						\
+})
+
+/*
  * Freezer-friendly wrappers around wait_event_interruptible(),
  * wait_event_killable() and wait_event_interruptible_timeout(), originally
  * defined in <linux/wait.h>
@@ -112,31 +135,34 @@ static inline int freezer_should_skip(struct task_struct *p)
 #define wait_event_freezable(wq, condition)				\
 ({									\
 	int __retval;							\
-	do {								\
+	for (;;) {							\
 		__retval = wait_event_interruptible(wq, 		\
 				(condition) || freezing(current));	\
-		if (__retval && !freezing(current))			\
+		if (__retval || (condition))				\
 			break;						\
-		else if (!(condition))					\
-			__retval = -ERESTARTSYS;			\
-	} while (try_to_freeze());					\
+		try_to_freeze();					\
+	}								\
 	__retval;							\
 })
-
 
 #define wait_event_freezable_timeout(wq, condition, timeout)		\
 ({									\
 	long __retval = timeout;					\
-	do {								\
+	for (;;) {							\
 		__retval = wait_event_interruptible_timeout(wq,		\
 				(condition) || freezing(current),	\
 				__retval); 				\
-	} while (try_to_freeze());					\
+		if (__retval <= 0 || (condition))			\
+			break;						\
+		try_to_freeze();					\
+	}								\
 	__retval;							\
 })
+
 #else /* !CONFIG_FREEZER */
 static inline bool frozen(struct task_struct *p) { return false; }
 static inline bool freezing(struct task_struct *p) { return false; }
+static inline void __thaw_task(struct task_struct *t) {}
 
 static inline bool __refrigerator(bool check_kthr_stop) { return false; }
 static inline int freeze_processes(void) { return -ENOSYS; }
@@ -149,6 +175,11 @@ static inline void freezer_do_not_count(void) {}
 static inline void freezer_count(void) {}
 static inline int freezer_should_skip(struct task_struct *p) { return 0; }
 static inline void set_freezable(void) {}
+
+#define freezable_schedule()  schedule()
+
+#define freezable_schedule_timeout_killable(timeout)			\
+	schedule_timeout_killable(timeout)
 
 #define wait_event_freezable(wq, condition)				\
 		wait_event_interruptible(wq, condition)
