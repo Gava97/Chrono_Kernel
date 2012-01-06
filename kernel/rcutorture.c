@@ -61,9 +61,11 @@ static int test_no_idle_hz;	/* Test RCU's support for tickless idle CPUs. */
 static int shuffle_interval = 3; /* Interval between shuffles (in sec)*/
 static int stutter = 5;		/* Start/stop testing interval (in sec) */
 static int irqreader = 1;	/* RCU readers from irq (timers). */
-static int fqs_duration = 0;	/* Duration of bursts (us), 0 to disable. */
-static int fqs_holdoff = 0;	/* Hold time within burst (us). */
+static int fqs_duration;	/* Duration of bursts (us), 0 to disable. */
+static int fqs_holdoff;		/* Hold time within burst (us). */
 static int fqs_stutter = 3;	/* Wait time between bursts (s). */
+static int onoff_interval;	/* Wait time between CPU hotplugs, 0=disable. */
+static int shutdown_secs;	/* Shutdown time (s).  <=0 for no shutdown. */
 static int test_boost = 1;	/* Test RCU prio boost: 0=no, 1=maybe, 2=yes. */
 static int test_boost_interval = 7; /* Interval between boost tests, seconds. */
 static int test_boost_duration = 4; /* Duration of each boost test, seconds. */
@@ -91,6 +93,10 @@ module_param(fqs_holdoff, int, 0444);
 MODULE_PARM_DESC(fqs_holdoff, "Holdoff time within fqs bursts (us)");
 module_param(fqs_stutter, int, 0444);
 MODULE_PARM_DESC(fqs_stutter, "Wait time between fqs bursts (s)");
+module_param(onoff_interval, int, 0444);
+MODULE_PARM_DESC(onoff_interval, "Time between CPU hotplugs (s), 0=disable");
+module_param(shutdown_secs, int, 0444);
+MODULE_PARM_DESC(shutdown_secs, "Shutdown time (s), zero to disable.");
 module_param(test_boost, int, 0444);
 MODULE_PARM_DESC(test_boost, "Test RCU prio boost: 0=no, 1=maybe, 2=yes.");
 module_param(test_boost_interval, int, 0444);
@@ -119,6 +125,10 @@ static struct task_struct *shuffler_task;
 static struct task_struct *stutter_task;
 static struct task_struct *fqs_task;
 static struct task_struct *boost_tasks[NR_CPUS];
+static struct task_struct *shutdown_task;
+#ifdef CONFIG_HOTPLUG_CPU
+static struct task_struct *onoff_task;
+#endif /* #ifdef CONFIG_HOTPLUG_CPU */
 
 #define RCU_TORTURE_PIPE_LEN 10
 
@@ -149,6 +159,10 @@ static long n_rcu_torture_boost_rterror;
 static long n_rcu_torture_boost_failure;
 static long n_rcu_torture_boosts;
 static long n_rcu_torture_timers;
+static long n_offline_attempts;
+static long n_offline_successes;
+static long n_online_attempts;
+static long n_online_successes;
 static struct list_head rcu_torture_removed;
 static cpumask_var_t shuffle_tmp_mask;
 
@@ -160,6 +174,8 @@ static int stutter_pause_test;
 #define RCUTORTURE_RUNNABLE_INIT 0
 #endif
 int rcutorture_runnable = RCUTORTURE_RUNNABLE_INIT;
+module_param(rcutorture_runnable, int, 0444);
+MODULE_PARM_DESC(rcutorture_runnable, "Start rcutorture at boot");
 
 #if defined(CONFIG_RCU_BOOST) && !defined(CONFIG_HOTPLUG_CPU)
 #define rcu_can_boost() 1
@@ -167,6 +183,7 @@ int rcutorture_runnable = RCUTORTURE_RUNNABLE_INIT;
 #define rcu_can_boost() 0
 #endif /* #else #if defined(CONFIG_RCU_BOOST) && !defined(CONFIG_HOTPLUG_CPU) */
 
+static unsigned long shutdown_time;	/* jiffies to system shutdown. */
 static unsigned long boost_starttime;	/* jiffies of next boost test start. */
 DEFINE_MUTEX(boost_mutex);		/* protect setting boost_starttime */
 					/*  and boost task create/destroy. */
@@ -181,6 +198,9 @@ static int fullstop = FULLSTOP_RMMOD;
  * Protect fullstop transitions and spawning of kthreads.
  */
 static DEFINE_MUTEX(fullstop_mutex);
+
+/* Forward reference. */
+static void rcu_torture_cleanup(void);
 
 /*
  * Detect and respond to a system shutdown.
@@ -937,6 +957,18 @@ rcu_torture_fakewriter(void *arg)
 	return 0;
 }
 
+void rcutorture_trace_dump(void)
+{
+	static atomic_t beenhere = ATOMIC_INIT(0);
+
+	if (atomic_read(&beenhere))
+		return;
+	if (atomic_xchg(&beenhere, 1) != 0)
+		return;
+	do_trace_rcu_torture_read(cur_ops->name, (struct rcu_head *)~0UL);
+	ftrace_dump(DUMP_ALL);
+}
+
 /*
  * RCU torture reader from timer handler.  Dereferences rcu_torture_current,
  * incrementing the corresponding element of the pipeline array.  The
@@ -958,6 +990,7 @@ static void rcu_torture_timer(unsigned long unused)
 				  rcu_read_lock_bh_held() ||
 				  rcu_read_lock_sched_held() ||
 				  srcu_read_lock_held(&srcu_ctl));
+	do_trace_rcu_torture_read(cur_ops->name, &p->rtort_rcu);
 	if (p == NULL) {
 		/* Leave because rcu_torture_writer is not yet underway */
 		cur_ops->readunlock(idx);
@@ -975,6 +1008,8 @@ static void rcu_torture_timer(unsigned long unused)
 		/* Should not happen, but... */
 		pipe_count = RCU_TORTURE_PIPE_LEN;
 	}
+	if (pipe_count > 1)
+		rcutorture_trace_dump();
 	__this_cpu_inc(rcu_torture_count[pipe_count]);
 	completed = cur_ops->completed() - completed;
 	if (completed > RCU_TORTURE_PIPE_LEN) {
@@ -1018,6 +1053,7 @@ rcu_torture_reader(void *arg)
 					  rcu_read_lock_bh_held() ||
 					  rcu_read_lock_sched_held() ||
 					  srcu_read_lock_held(&srcu_ctl));
+		do_trace_rcu_torture_read(cur_ops->name, &p->rtort_rcu);
 		if (p == NULL) {
 			/* Wait for rcu_torture_writer to get underway */
 			cur_ops->readunlock(idx);
@@ -1033,6 +1069,8 @@ rcu_torture_reader(void *arg)
 			/* Should not happen, but... */
 			pipe_count = RCU_TORTURE_PIPE_LEN;
 		}
+		if (pipe_count > 1)
+			rcutorture_trace_dump();
 		__this_cpu_inc(rcu_torture_count[pipe_count]);
 		completed = cur_ops->completed() - completed;
 		if (completed > RCU_TORTURE_PIPE_LEN) {
@@ -1080,7 +1118,8 @@ rcu_torture_printk(char *page)
 	cnt += sprintf(&page[cnt],
 		       "rtc: %p ver: %lu tfle: %d rta: %d rtaf: %d rtf: %d "
 		       "rtmbe: %d rtbke: %ld rtbre: %ld "
-		       "rtbf: %ld rtb: %ld nt: %ld",
+		       "rtbf: %ld rtb: %ld nt: %ld "
+		       "onoff: %ld/%ld:%ld/%ld",
 		       rcu_torture_current,
 		       rcu_torture_current_version,
 		       list_empty(&rcu_torture_freelist),
@@ -1092,7 +1131,11 @@ rcu_torture_printk(char *page)
 		       n_rcu_torture_boost_rterror,
 		       n_rcu_torture_boost_failure,
 		       n_rcu_torture_boosts,
-		       n_rcu_torture_timers);
+		       n_rcu_torture_timers,
+		       n_online_successes,
+		       n_online_attempts,
+		       n_offline_successes,
+		       n_offline_attempts);
 	if (atomic_read(&n_rcu_torture_mberror) != 0 ||
 	    n_rcu_torture_boost_ktrerror != 0 ||
 	    n_rcu_torture_boost_rterror != 0 ||
@@ -1256,12 +1299,14 @@ rcu_torture_print_module_parms(struct rcu_torture_ops *cur_ops, char *tag)
 		"shuffle_interval=%d stutter=%d irqreader=%d "
 		"fqs_duration=%d fqs_holdoff=%d fqs_stutter=%d "
 		"test_boost=%d/%d test_boost_interval=%d "
-		"test_boost_duration=%d\n",
+		"test_boost_duration=%d shutdown_secs=%d "
+		"onoff_interval=%d\n",
 		torture_type, tag, nrealreaders, nfakewriters,
 		stat_interval, verbose, test_no_idle_hz, shuffle_interval,
 		stutter, irqreader, fqs_duration, fqs_holdoff, fqs_stutter,
 		test_boost, cur_ops->can_boost,
-		test_boost_interval, test_boost_duration);
+		test_boost_interval, test_boost_duration, shutdown_secs,
+		onoff_interval);
 }
 
 static struct notifier_block rcutorture_shutdown_nb = {
@@ -1540,6 +1585,11 @@ rcu_torture_cleanup(void)
 		for_each_possible_cpu(i)
 			rcutorture_booster_cleanup(i);
 	}
+	if (shutdown_task != NULL) {
+		VERBOSE_PRINTK_STRING("Stopping rcu_torture_shutdown task");
+		kthread_stop(shutdown_task);
+	}
+	rcu_torture_onoff_cleanup();
 
 	/* Wait for all RCU callbacks to fire.  */
 
@@ -1756,6 +1806,18 @@ rcu_torture_init(void)
 			}
 		}
 	}
+	if (shutdown_secs > 0) {
+		shutdown_time = jiffies + shutdown_secs * HZ;
+		shutdown_task = kthread_run(rcu_torture_shutdown, NULL,
+					    "rcu_torture_shutdown");
+		if (IS_ERR(shutdown_task)) {
+			firsterr = PTR_ERR(shutdown_task);
+			VERBOSE_PRINTK_ERRSTRING("Failed to create shutdown");
+			shutdown_task = NULL;
+			goto unwind;
+		}
+	}
+	rcu_torture_onoff_init();
 	register_reboot_notifier(&rcutorture_shutdown_nb);
 	rcutorture_record_test_transition();
 	mutex_unlock(&fullstop_mutex);
