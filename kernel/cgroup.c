@@ -1939,9 +1939,8 @@ int cgroup_attach_task(struct cgroup *cgrp, struct task_struct *tsk)
 	struct cgroup_subsys *ss, *failed_ss = NULL;
 	struct cgroup *oldcgrp;
 	struct cgroupfs_root *root = cgrp->root;
-	struct css_set *cg;
 	struct cgroup_taskset tset = { };
-	
+
 	/* @tsk either already exited or can't exit until the end */
 	if (tsk->flags & PF_EXITING)
 		return -ESRCH;
