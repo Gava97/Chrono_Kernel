@@ -360,7 +360,7 @@ EXPORT_SYMBOL(kernel_sec_save_final_context);
  *
  *	This function never returns.
  */
-NORET_TYPE void panic(const char * fmt, ...)
+void panic(const char *fmt, ...)
 {
 	static char buf[1024];
 	va_list args;
