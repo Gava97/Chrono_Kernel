@@ -217,7 +217,11 @@ static void sh7372_a3sp_init(void)
 	/* serial consoles make use of SCIF hardware located in A3SP,
 	 * keep such power domain on if "no_console_suspend" is set.
 	 */
+<<<<<<< HEAD
 	sh7372_a3sp.stay_on = !console_suspend_enabled;
+=======
+	return console_suspend_enabled ? 0 : -EBUSY;
+>>>>>>> 9774040... Merge branch 'pm-for-linus' of git://git.kernel.org/pub/scm/linux/kernel/git/rafael/linux-pm
 }
 
 >>>>>>> 2d360fc... Merge branch 'pm-fixes' of git://git.kernel.org/pub/scm/linux/kernel/git/rafael/linux-pm
