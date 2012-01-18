@@ -1535,9 +1535,6 @@ long do_fork(unsigned long clone_flags,
 			init_completion(&vfork);
 		}
 
-		audit_finish_fork(p);
-		tracehook_report_clone(regs, clone_flags, nr, p);
-
 		/*
 		 * We set PF_STARTING at creation in case tracing wants to
 		 * use this to distinguish a fully live task from one that
