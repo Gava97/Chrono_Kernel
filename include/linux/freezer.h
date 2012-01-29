@@ -38,6 +38,7 @@ extern void __thaw_task(struct task_struct *t);
 extern bool __refrigerator(bool check_kthr_stop);
 extern int freeze_processes(void);
 extern void thaw_processes(void);
+extern void thaw_kernel_threads(void);
 
 static inline bool try_to_freeze(void)
 {
@@ -162,6 +163,7 @@ static inline bool __refrigerator(bool check_kthr_stop) { return false; }
 static inline int freeze_processes(void) { return -ENOSYS; }
 static inline int freeze_kernel_threads(void) { return -ENOSYS; }
 static inline void thaw_processes(void) {}
+static inline void thaw_kernel_threads(void) {}
 
 static inline bool try_to_freeze(void) { return false; }
 
