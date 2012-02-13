@@ -290,7 +290,7 @@ static int plug_secondary_cpus(void *data)
  * Fail if that's not the case.  Otherwise, prepare for system suspend, make the
  * system enter the given sleep state and clean up after wakeup.
  */
-int enter_state(suspend_state_t state)
+static int enter_state(suspend_state_t state)
 {
 	int error;
 	struct task_struct *cpu_task;
