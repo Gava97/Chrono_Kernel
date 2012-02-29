@@ -9,6 +9,8 @@
 #include <linux/init.h>
 #include <linux/io.h>
 
+#include <linux/export.h>
+
 #include <asm/cputype.h>
 #include <asm/tlbflush.h>
 #include <asm/cacheflush.h>
