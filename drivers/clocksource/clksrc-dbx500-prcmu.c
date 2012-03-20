@@ -53,7 +53,6 @@ static struct clocksource clocksource_dbx500_prcmu = {
 	.name		= "dbx500-prcmu-timer",
 	.rating		= 300,
 	.read		= clksrc_dbx500_prcmu_read,
-	.shift		= 10,
 	.mask		= CLOCKSOURCE_MASK(32),
 	.flags		= CLOCK_SOURCE_IS_CONTINUOUS,
 };
@@ -118,9 +117,5 @@ void __init clksrc_dbx500_prcmu_init(void __iomem *base)
 	init_sched_clock(&cd, clksrc_dbx500_prcmu_update_sched_clock,
 			 32, RATE_32K);
 #endif
-	clocksource_calc_mult_shift(&clocksource_dbx500_prcmu,
-				    RATE_32K, SCHED_CLOCK_MIN_WRAP);
-	clocksource_register(&clocksource_dbx500_prcmu);
-
-	boottime_activate(&boottime_timer);
+	clocksource_register_hz(&clocksource_dbx500_prcmu, RATE_32K);
 }
