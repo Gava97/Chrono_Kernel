@@ -878,7 +878,6 @@ static void timekeeping_adjust(s64 offset)
 			(long)timekeeper.clock->mult +
 				timekeeper.clock->maxadj);
 	}
-
 	/*
 	 * So the following can be confusing.
 	 *
