@@ -1866,8 +1866,8 @@ S:	Maintained
 F:	drivers/connector/
 
 CONTROL GROUPS (CGROUPS)
-M:	Paul Menage <menage@google.com>
-M:	Li Zefan <lizf@cn.fujitsu.com>
+M:	Tejun Heo <tj@kernel.org>
+M:	Li Zefan <lizefan@huawei.com>
 L:	containers@lists.linux-foundation.org
 S:	Maintained
 F:	include/linux/cgroup*
