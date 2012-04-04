@@ -132,6 +132,7 @@ static inline void usermodehelper_enable(void)
 }
 
 extern int usermodehelper_read_trylock(void);
+extern long usermodehelper_read_lock_wait(long timeout);
 extern void usermodehelper_read_unlock(void);
 
 #endif /* __LINUX_KMOD_H__ */

@@ -32,6 +32,11 @@ struct pm_qos_request {
 	struct delayed_work work; /* for pm_qos_update_request_timeout */
 };
 
+struct dev_pm_qos_request {
+	struct plist_node node;
+	struct device *dev;
+};
+
 enum pm_qos_type {
 	PM_QOS_UNITIALIZED,
 	PM_QOS_MAX,		/* return the largest value */

@@ -469,6 +469,30 @@ static int rpm_suspend(struct device *dev, int rpmflags)
 	trace_rpm_return_int(dev, _THIS_IP_, retval);
 
 	return retval;
+
+ fail:
+	__update_runtime_status(dev, RPM_ACTIVE);
+	dev->power.suspend_time = ktime_set(0, 0);
+	dev->power.max_time_suspended_ns = -1;
+	dev->power.deferred_resume = false;
+	wake_up_all(&dev->power.wait_queue);
+
+	if (retval == -EAGAIN || retval == -EBUSY) {
+		dev->power.runtime_error = 0;
+
+		/*
+		 * If the callback routine failed an autosuspend, and
+		 * if the last_busy time has been updated so that there
+		 * is a new autosuspend expiration time, automatically
+		 * reschedule another autosuspend.
+		 */
+		if ((rpmflags & RPM_AUTO) &&
+		    pm_runtime_autosuspend_expiration(dev) != 0)
+			goto repeat;
+	} else {
+		pm_runtime_cancel_pending(dev);
+	}
+	goto out;
 }
 
 /**
