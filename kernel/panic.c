@@ -129,8 +129,6 @@ void panic(const char *fmt, ...)
 	 */
 	crash_kexec(NULL);
 
-	kmsg_dump(KMSG_DUMP_PANIC);
-
 	/*
 	 * Note smp_send_stop is the usual smp shutdown function, which
 	 * unfortunately means it may not be hardened to work in a panic
@@ -138,42 +136,9 @@ void panic(const char *fmt, ...)
 	 */
 	smp_send_stop();
 
-#ifdef CONFIG_SAMSUNG_KERNEL_DEBUG
-	
-		/*kernel_sec_save_final_context();*/
+	kmsg_dump(KMSG_DUMP_PANIC);
 
-	/* L1 & L2 cache management */
-	flush_cache_all();
-
-	if (cpu_is_u8500())
-		ux500_clean_l2_cache_all();
-
-	if (0 == strcmp(fmt,"__do_user_fault"))
-	{
-		printk(KERN_INFO "machine_restart: userlockup\n" ) ;
-		machine_restart("UserLockUp");
-	}
-	else if (0 == strcmp(fmt, "__forced_upload"))
-	{
-		printk(KERN_INFO "machine_restart: __forced_upload\n" ) ;
-		machine_restart("ForcedUpload");
-	}
-	else if (0 == strcmp(fmt, "__MMDSP_forced_upload"))
-	{
-		printk(KERN_INFO "machine_restart: __MMDSP_forced_upload\n" ) ;
-		machine_restart("MMDSP_ForcedUpload");
-	}
-	else
-	{
-		printk(KERN_INFO "machine_restart: lockup\n" ) ;
-		machine_restart("LockUp");
-	}
-
-	for (i = 0; i < 1*1000; i++) {
-		touch_nmi_watchdog();
-		mdelay(1);
-	}
-#endif /* CONFIG_SAMSUNG_KERNEL_DEBUG */
+	atomic_notifier_call_chain(&panic_notifier_list, 0, buf);
 
 	bust_spinlocks(0);
 
