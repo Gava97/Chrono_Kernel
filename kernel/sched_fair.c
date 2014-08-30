@@ -1949,7 +1949,7 @@ enqueue_task_fair(struct rq *rq, struct task_struct *p, int flags)
 		*/
 		if (cfs_rq_throttled(cfs_rq))
 			break;
-		cfs_rq->h_nr_running++
+		cfs_rq->h_nr_running++;
 
 		flags = ENQUEUE_WAKEUP;
 	}

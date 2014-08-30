@@ -1256,33 +1256,44 @@ static DEFINE_PER_CPU(int, bdp_ratelimits);
  * from overshooting the limit by (ratelimit_pages) each.
  */
 void balance_dirty_pages_ratelimited_nr(struct address_space *mapping,
-					unsigned long nr_pages_dirtied)
+                                        unsigned long nr_pages_dirtied)
 {
-	unsigned long ratelimit;
-	unsigned long *p;
+        struct backing_dev_info *bdi = mapping->backing_dev_info;
+        int ratelimit;
+        int *p;
 
-	ratelimit = ratelimit_pages;
-	if (mapping->backing_dev_info->dirty_exceeded)
-		ratelimit = 8;
+        if (!bdi_cap_account_dirty(bdi))
+                return;
 
-	/*
-	 * Check the rate limiting. Also, we do not want to throttle real-time
-	 * tasks in balance_dirty_pages(). Period.
-	 */
-	preempt_disable();
-	p =  &__get_cpu_var(bdp_ratelimits);
-	*p += nr_pages_dirtied;
-	if (unlikely(*p >= ratelimit)) {
-		ratelimit = sync_writeback_pages(*p);
-		*p = 0;
-		preempt_enable();
-		balance_dirty_pages(mapping, ratelimit);
-		return;
-	}
-	preempt_enable();
+        ratelimit = current->nr_dirtied_pause;
+        if (bdi->dirty_exceeded)
+                ratelimit = min(ratelimit, 32 >> (PAGE_SHIFT - 10));
+
+        current->nr_dirtied += nr_pages_dirtied;
+
+        preempt_disable();
+        /*
+         * This prevents one CPU to accumulate too many dirtied pages without
+         * calling into balance_dirty_pages(), which can happen when there are
+         * 1000+ tasks, all of them start dirtying pages at exactly the same
+         * time, hence all honoured too large initial task->nr_dirtied_pause.
+         */
+        p =  &__get_cpu_var(bdp_ratelimits);
+        if (unlikely(current->nr_dirtied >= ratelimit))
+                *p = 0;
+        else {
+                *p += nr_pages_dirtied;
+                if (unlikely(*p >= ratelimit_pages)) {
+                        *p = 0;
+                        ratelimit = 0;
+                }
+        }
+        preempt_enable();
+
+        if (unlikely(current->nr_dirtied >= ratelimit))
+                balance_dirty_pages(mapping, current->nr_dirtied);
 }
 EXPORT_SYMBOL(balance_dirty_pages_ratelimited_nr);
-
 void throttle_vm_writeout(gfp_t gfp_mask)
 {
 	unsigned long background_thresh;
