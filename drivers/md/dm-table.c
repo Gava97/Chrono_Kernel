@@ -53,7 +53,8 @@ struct dm_table {
 	unsigned int num_allocated;
 	sector_t *highs;
 	struct dm_target *targets;
-
+	
+	struct target_type *immutable_target_type;
 	unsigned discards_supported:1;
 	unsigned integrity_supported:1;
 	unsigned singleton:1;

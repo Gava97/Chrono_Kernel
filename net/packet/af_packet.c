@@ -175,6 +175,7 @@ static int packet_set_ring(struct sock *sk, union tpacket_req_u *req_u,
 
 #define BLK_PLUS_PRIV(sz_of_priv) \
 	(BLK_HDR_LEN + ALIGN((sz_of_priv), V3_ALIGNMENT))
+	
 
 /* kbdq - kernel block descriptor queue */
 struct kbdq_core {
@@ -302,6 +303,16 @@ struct packet_skb_cb {
 
 #define PACKET_SKB_CB(__skb)	((struct packet_skb_cb *)((__skb)->cb))
 
+
+#define GET_PBDQC_FROM_RB(x)	((struct kbdq_core *)(&(x)->prb_bdqc))
+#define GET_PBLOCK_DESC(x, bid)	\
+	((struct block_desc *)((x)->pkbdq[(bid)].buffer))
+#define GET_CURR_PBLOCK_DESC_FROM_CORE(x)	\
+	((struct block_desc *)((x)->pkbdq[(x)->kactive_blk_num].buffer))
+#define GET_NEXT_PRB_BLK_NUM(x) \
+	(((x)->kactive_blk_num < ((x)->knum_blocks-1)) ? \
+	((x)->kactive_blk_num+1) : 0)
+
 static inline __pure struct page *pgv_to_page(void *addr)
 {
 	if (is_vmalloc_addr(addr))
@@ -329,7 +340,7 @@ static void __packet_set_status(struct packet_sock *po, void *frame, int status)
 		break;
 	case TPACKET_V3:
 	default:
-		WARN(1, "TPACKET version not supported.\n");
+		pr_err("TPACKET version not supported.\n");
 		BUG();
 	}
 
@@ -356,7 +367,7 @@ static int __packet_get_status(struct packet_sock *po, void *frame)
 		return h.h2->tp_status;
 	case TPACKET_V3:
 	default:
-		WARN(1, "TPACKET version not supported.\n");
+		pr_err("TPACKET version not supported.\n");
 		BUG();
 		return 0;
 	}
@@ -626,37 +637,34 @@ out:
 static inline void prb_flush_block(struct kbdq_core *pkc1,
 		struct block_desc *pbd1, __u32 status)
 {
-	/* Flush everything minus the block header */
+        /* Flush everything minus the block header */
 
 #if ARCH_IMPLEMENTS_FLUSH_DCACHE_PAGE == 1
-	u8 *start, *end;
+        u8 *start, *end;
 
-	start = (u8 *)pbd1;
+        start = (u8 *)pbd1;
 
-	/* Skip the block header(we know header WILL fit in 4K) */
-	start += PAGE_SIZE;
+        /* Skip the block header(we know header WILL fit in 4K) */
+        start += PAGE_SIZE;
 
-	if (po->tp_version <= TPACKET_V2) {
-		end = (u8 *)PAGE_ALIGN((unsigned long)h.raw
-			+ macoff + snaplen);
-		for (start = h.raw; start < end; start += PAGE_SIZE)
-			flush_dcache_page(pgv_to_page(start));
-	}
+        end = (u8 *)PAGE_ALIGN((unsigned long)pkc1->pkblk_end);
+        for (; start < end; start += PAGE_SIZE)
+                flush_dcache_page(pgv_to_page(start));
 
-	smp_wmb();
+        smp_wmb();
 #endif
 
-	/* Now update the block status. */
+        /* Now update the block status. */
 
-	BLOCK_STATUS(pbd1) = status;
+        BLOCK_STATUS(pbd1) = status;
 
-	/* Flush the block header */
+        /* Flush the block header */
 
 #if ARCH_IMPLEMENTS_FLUSH_DCACHE_PAGE == 1
-	start = (u8 *)pbd1;
-	flush_dcache_page(pgv_to_page(start));
+        start = (u8 *)pbd1;
+        flush_dcache_page(pgv_to_page(start));
 
-	smp_wmb();
+        smp_wmb();
 #endif
 }
 
@@ -749,8 +757,7 @@ static void prb_open_block(struct kbdq_core *pkc1, struct block_desc *pbd1)
 		return;
 	}
 
-	WARN(1, "ERROR block:%p is NOT FREE status:%d kactive_blk_num:%d
-",
+	pr_err("ERROR block:%p is NOT FREE status:%d kactive_blk_num:%d",
 		pbd1, BLOCK_STATUS(pbd1), pkc1->kactive_blk_num);
 	dump_stack();
 	BUG();
@@ -845,8 +852,7 @@ static void prb_retire_current_block(struct kbdq_core *pkc,
 		return;
 	}
 
-	WARN(1, "ERROR-pbd[%d]:%p
-", pkc->kactive_blk_num, pbd);
+	pr_err("ERROR-pbd[%d]:%p", pkc->kactive_blk_num, pbd);
 	dump_stack();
 	BUG();
 }
@@ -995,8 +1001,7 @@ static inline void *packet_current_rx_frame(struct packet_sock *po,
 	case TPACKET_V3:
 		return __packet_lookup_frame_in_block(po, skb, status, len);
 	default:
-		WARN(1, "TPACKET version not supported
-");
+		pr_err("TPACKET version not supported.\n");
 		BUG();
 		return 0;
 	}
@@ -1053,8 +1058,7 @@ static inline void packet_increment_rx_head(struct packet_sock *po,
 		return packet_increment_head(rb);
 	case TPACKET_V3:
 	default:
-		WARN(1, "TPACKET version not supported.
-");
+		pr_err("TPACKET version not supported.\n");
 		BUG();
 		return;
 	}
@@ -1072,15 +1076,6 @@ static inline void packet_increment_head(struct packet_ring_buffer *buff)
 {
 	buff->head = buff->head != buff->frame_max ? buff->head+1 : 0;
 }
-
-#define GET_PBDQC_FROM_RB(x)	((struct kbdq_core *)(&(x)->prb_bdqc))
-#define GET_PBLOCK_DESC(x, bid)	\
-	((struct block_desc *)((x)->pkbdq[(bid)].buffer))
-#define GET_CURR_PBLOCK_DESC_FROM_CORE(x)	\
-	((struct block_desc *)((x)->pkbdq[(x)->kactive_blk_num].buffer))
-#define GET_NEXT_PRB_BLK_NUM(x) \
-	(((x)->kactive_blk_num < ((x)->knum_blocks-1)) ? \
-	((x)->kactive_blk_num+1) : 0)
 
 static inline struct packet_sock *pkt_sk(struct sock *sk)
 {
@@ -3289,7 +3284,7 @@ static int packet_set_ring(struct sock *sk, union tpacket_req_u *req_u,
 
 	/* Opening a Tx-ring is NOT supported in TPACKET_V3 */
 	if (!closing && tx_ring && (po->tp_version > TPACKET_V2)) {
-		WARN(1, "Tx-ring is not supported.\n");
+		pr_err("Tx-ring is not supported.\n");
 		goto out;
 	}
 
