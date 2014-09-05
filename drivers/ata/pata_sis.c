@@ -588,7 +588,7 @@ static const struct ata_port_info sis_info100_early = {
 static const struct ata_port_info sis_info133 = {
 	.flags		= ATA_FLAG_SLAVE_POSS,
 	.pio_mask	= ATA_PIO4,
-	/* No MWDMA */
+	.mwdma_mask	= ATA_MWDMA2,
 	.udma_mask	= ATA_UDMA6,
 	.port_ops	= &sis_133_ops,
 };
