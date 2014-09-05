@@ -23,6 +23,7 @@
 #include <linux/module.h>
 #include <linux/mutex.h>
 #include <linux/slab.h>
+#include <linux/bsg-lib.h>
 #include <net/tcp.h>
 #include <scsi/scsi.h>
 #include <scsi/scsi_host.h>
@@ -31,6 +32,7 @@
 #include <scsi/scsi_transport_iscsi.h>
 #include <scsi/iscsi_if.h>
 #include <scsi/scsi_cmnd.h>
+#include <scsi/scsi_bsg_iscsi.h>
 
 #define ISCSI_SESSION_ATTRS 23
 #define ISCSI_CONN_ATTRS 13
@@ -270,6 +272,282 @@ struct iscsi_endpoint *iscsi_lookup_endpoint(u64 handle)
 }
 EXPORT_SYMBOL_GPL(iscsi_lookup_endpoint);
 
+/*
+ * BSG support
+ */
+/**
+ * iscsi_bsg_host_dispatch - Dispatch command to LLD.
+ * @job: bsg job to be processed
+ */
+static int iscsi_bsg_host_dispatch(struct bsg_job *job)
+{
+	struct Scsi_Host *shost = iscsi_job_to_shost(job);
+	struct iscsi_bsg_request *req = job->request;
+	struct iscsi_bsg_reply *reply = job->reply;
+	struct iscsi_internal *i = to_iscsi_internal(shost->transportt);
+	int cmdlen = sizeof(uint32_t);	/* start with length of msgcode */
+	int ret;
+
+	/* check if we have the msgcode value at least */
+	if (job->request_len < sizeof(uint32_t)) {
+		ret = -ENOMSG;
+		goto fail_host_msg;
+	}
+
+	/* Validate the host command */
+	switch (req->msgcode) {
+	case ISCSI_BSG_HST_VENDOR:
+		cmdlen += sizeof(struct iscsi_bsg_host_vendor);
+		if ((shost->hostt->vendor_id == 0L) ||
+		    (req->rqst_data.h_vendor.vendor_id !=
+			shost->hostt->vendor_id)) {
+			ret = -ESRCH;
+			goto fail_host_msg;
+		}
+		break;
+	default:
+		ret = -EBADR;
+		goto fail_host_msg;
+	}
+
+	/* check if we really have all the request data needed */
+	if (job->request_len < cmdlen) {
+		ret = -ENOMSG;
+		goto fail_host_msg;
+	}
+
+	ret = i->iscsi_transport->bsg_request(job);
+	if (!ret)
+		return 0;
+
+fail_host_msg:
+	/* return the errno failure code as the only status */
+	BUG_ON(job->reply_len < sizeof(uint32_t));
+	reply->reply_payload_rcv_len = 0;
+	reply->result = ret;
+	job->reply_len = sizeof(uint32_t);
+	bsg_job_done(job, ret, 0);
+	return 0;
+}
+
+/**
+ * iscsi_bsg_host_add - Create and add the bsg hooks to receive requests
+ * @shost: shost for iscsi_host
+ * @cls_host: iscsi_cls_host adding the structures to
+ */
+static int
+iscsi_bsg_host_add(struct Scsi_Host *shost, struct iscsi_cls_host *ihost)
+{
+	struct device *dev = &shost->shost_gendev;
+	struct iscsi_internal *i = to_iscsi_internal(shost->transportt);
+	struct request_queue *q;
+	char bsg_name[20];
+	int ret;
+
+	if (!i->iscsi_transport->bsg_request)
+		return -ENOTSUPP;
+
+	snprintf(bsg_name, sizeof(bsg_name), "iscsi_host%d", shost->host_no);
+
+	q = __scsi_alloc_queue(shost, bsg_request_fn);
+	if (!q)
+		return -ENOMEM;
+
+	ret = bsg_setup_queue(dev, q, bsg_name, iscsi_bsg_host_dispatch, 0);
+	if (ret) {
+		shost_printk(KERN_ERR, shost, "bsg interface failed to "
+			     "initialize - no request queue\n");
+		blk_cleanup_queue(q);
+		return ret;
+	}
+
+	ihost->bsg_q = q;
+	return 0;
+}
+
+/*
+ * Interface to display network param to sysfs
+ */
+
+static void iscsi_iface_release(struct device *dev)
+{
+	struct iscsi_iface *iface = iscsi_dev_to_iface(dev);
+	struct device *parent = iface->dev.parent;
+
+	kfree(iface);
+	put_device(parent);
+}
+
+
+static struct class iscsi_iface_class = {
+	.name = "iscsi_iface",
+	.dev_release = iscsi_iface_release,
+};
+
+#define ISCSI_IFACE_ATTR(_prefix, _name, _mode, _show, _store)	\
+struct device_attribute dev_attr_##_prefix##_##_name =		\
+	__ATTR(_name, _mode, _show, _store)
+
+/* iface attrs show */
+#define iscsi_iface_attr_show(type, name, param_type, param)		\
+static ssize_t								\
+show_##type##_##name(struct device *dev, struct device_attribute *attr,	\
+		     char *buf)						\
+{									\
+	struct iscsi_iface *iface = iscsi_dev_to_iface(dev);		\
+	struct iscsi_transport *t = iface->transport;			\
+	return t->get_iface_param(iface, param_type, param, buf);	\
+}									\
+
+#define iscsi_iface_net_attr(type, name, param)				\
+	iscsi_iface_attr_show(type, name, ISCSI_NET_PARAM, param)	\
+static ISCSI_IFACE_ATTR(type, name, S_IRUGO, show_##type##_##name, NULL);
+
+/* generic read only ipvi4 attribute */
+iscsi_iface_net_attr(ipv4_iface, ipaddress, ISCSI_NET_PARAM_IPV4_ADDR);
+iscsi_iface_net_attr(ipv4_iface, gateway, ISCSI_NET_PARAM_IPV4_GW);
+iscsi_iface_net_attr(ipv4_iface, subnet, ISCSI_NET_PARAM_IPV4_SUBNET);
+iscsi_iface_net_attr(ipv4_iface, bootproto, ISCSI_NET_PARAM_IPV4_BOOTPROTO);
+
+/* generic read only ipv6 attribute */
+iscsi_iface_net_attr(ipv6_iface, ipaddress, ISCSI_NET_PARAM_IPV6_ADDR);
+iscsi_iface_net_attr(ipv6_iface, link_local_addr, ISCSI_NET_PARAM_IPV6_LINKLOCAL);
+iscsi_iface_net_attr(ipv6_iface, router_addr, ISCSI_NET_PARAM_IPV6_ROUTER);
+iscsi_iface_net_attr(ipv6_iface, ipaddr_autocfg,
+		     ISCSI_NET_PARAM_IPV6_ADDR_AUTOCFG);
+iscsi_iface_net_attr(ipv6_iface, linklocal_autocfg,
+		     ISCSI_NET_PARAM_IPV6_LINKLOCAL_AUTOCFG);
+
+/* common read only iface attribute */
+iscsi_iface_net_attr(iface, enabled, ISCSI_NET_PARAM_IFACE_ENABLE);
+iscsi_iface_net_attr(iface, vlan, ISCSI_NET_PARAM_VLAN_ID);
+iscsi_iface_net_attr(iface, vlan_priority, ISCSI_NET_PARAM_VLAN_PRIORITY);
+iscsi_iface_net_attr(iface, vlan_enabled, ISCSI_NET_PARAM_VLAN_ENABLED);
+
+static mode_t iscsi_iface_attr_is_visible(struct kobject *kobj,
+					  struct attribute *attr, int i)
+{
+	struct device *dev = container_of(kobj, struct device, kobj);
+	struct iscsi_iface *iface = iscsi_dev_to_iface(dev);
+	struct iscsi_transport *t = iface->transport;
+
+	if (attr == &dev_attr_iface_enabled.attr)
+		return (t->iface_param_mask & ISCSI_NET_IFACE_ENABLE) ?
+								S_IRUGO : 0;
+	else if (attr == &dev_attr_iface_vlan.attr)
+		return (t->iface_param_mask & ISCSI_NET_VLAN_ID) ? S_IRUGO : 0;
+
+	if (iface->iface_type == ISCSI_IFACE_TYPE_IPV4) {
+		if (attr == &dev_attr_ipv4_iface_ipaddress.attr)
+			return (t->iface_param_mask & ISCSI_NET_IPV4_ADDR) ?
+								S_IRUGO : 0;
+		else if (attr == &dev_attr_ipv4_iface_gateway.attr)
+			return (t->iface_param_mask & ISCSI_NET_IPV4_GW) ?
+								S_IRUGO : 0;
+		else if (attr == &dev_attr_ipv4_iface_subnet.attr)
+			return (t->iface_param_mask & ISCSI_NET_IPV4_SUBNET) ?
+								S_IRUGO : 0;
+		else if (attr == &dev_attr_ipv4_iface_bootproto.attr)
+			return (t->iface_param_mask & ISCSI_NET_IPV4_BOOTPROTO) ?
+								 S_IRUGO : 0;
+	} else if (iface->iface_type == ISCSI_IFACE_TYPE_IPV6) {
+		if (attr == &dev_attr_ipv6_iface_ipaddress.attr)
+			return (t->iface_param_mask & ISCSI_NET_IPV6_ADDR) ?
+								S_IRUGO : 0;
+		else if (attr == &dev_attr_ipv6_iface_link_local_addr.attr)
+			return (t->iface_param_mask & ISCSI_NET_IPV6_LINKLOCAL) ?
+								S_IRUGO : 0;
+		else if (attr == &dev_attr_ipv6_iface_router_addr.attr)
+			return (t->iface_param_mask & ISCSI_NET_IPV6_ROUTER) ?
+								S_IRUGO : 0;
+		else if (attr == &dev_attr_ipv6_iface_ipaddr_autocfg.attr)
+			return (t->iface_param_mask & ISCSI_NET_IPV6_ADDR_AUTOCFG) ?
+								S_IRUGO : 0;
+		else if (attr == &dev_attr_ipv6_iface_linklocal_autocfg.attr)
+			return (t->iface_param_mask & ISCSI_NET_IPV6_LINKLOCAL_AUTOCFG) ?
+								S_IRUGO : 0;
+	}
+
+	return 0;
+}
+
+static struct attribute *iscsi_iface_attrs[] = {
+	&dev_attr_iface_enabled.attr,
+	&dev_attr_iface_vlan.attr,
+	&dev_attr_iface_vlan_priority.attr,
+	&dev_attr_iface_vlan_enabled.attr,
+	&dev_attr_ipv4_iface_ipaddress.attr,
+	&dev_attr_ipv4_iface_gateway.attr,
+	&dev_attr_ipv4_iface_subnet.attr,
+	&dev_attr_ipv4_iface_bootproto.attr,
+	&dev_attr_ipv6_iface_ipaddress.attr,
+	&dev_attr_ipv6_iface_link_local_addr.attr,
+	&dev_attr_ipv6_iface_router_addr.attr,
+	&dev_attr_ipv6_iface_ipaddr_autocfg.attr,
+	&dev_attr_ipv6_iface_linklocal_autocfg.attr,
+	NULL,
+};
+
+static struct attribute_group iscsi_iface_group = {
+	.attrs = iscsi_iface_attrs,
+	.is_visible = iscsi_iface_attr_is_visible,
+};
+
+struct iscsi_iface *
+iscsi_create_iface(struct Scsi_Host *shost, struct iscsi_transport *transport,
+		   uint32_t iface_type, uint32_t iface_num, int dd_size)
+{
+	struct iscsi_iface *iface;
+	int err;
+
+	iface = kzalloc(sizeof(*iface) + dd_size, GFP_KERNEL);
+	if (!iface)
+		return NULL;
+
+	iface->transport = transport;
+	iface->iface_type = iface_type;
+	iface->iface_num = iface_num;
+	iface->dev.release = iscsi_iface_release;
+	iface->dev.class = &iscsi_iface_class;
+	/* parent reference released in iscsi_iface_release */
+	iface->dev.parent = get_device(&shost->shost_gendev);
+	if (iface_type == ISCSI_IFACE_TYPE_IPV4)
+		dev_set_name(&iface->dev, "ipv4-iface-%u-%u", shost->host_no,
+			     iface_num);
+	else
+		dev_set_name(&iface->dev, "ipv6-iface-%u-%u", shost->host_no,
+			     iface_num);
+
+	err = device_register(&iface->dev);
+	if (err)
+		goto free_iface;
+
+	err = sysfs_create_group(&iface->dev.kobj, &iscsi_iface_group);
+	if (err)
+		goto unreg_iface;
+
+	if (dd_size)
+		iface->dd_data = &iface[1];
+	return iface;
+
+unreg_iface:
+	device_unregister(&iface->dev);
+	return NULL;
+
+free_iface:
+	put_device(iface->dev.parent);
+	kfree(iface);
+	return NULL;
+}
+EXPORT_SYMBOL_GPL(iscsi_create_iface);
+
+void iscsi_destroy_iface(struct iscsi_iface *iface)
+{
+	sysfs_remove_group(&iface->dev.kobj, &iscsi_iface_group);
+	device_unregister(&iface->dev);
+}
+EXPORT_SYMBOL_GPL(iscsi_destroy_iface);
+
 static int iscsi_setup_host(struct transport_container *tc, struct device *dev,
 			    struct device *cdev)
 {
@@ -279,13 +557,30 @@ static int iscsi_setup_host(struct transport_container *tc, struct device *dev,
 	memset(ihost, 0, sizeof(*ihost));
 	atomic_set(&ihost->nr_scans, 0);
 	mutex_init(&ihost->mutex);
+
+	iscsi_bsg_host_add(shost, ihost);
+	/* ignore any bsg add error - we just can't do sgio */
+
+	return 0;
+}
+
+static int iscsi_remove_host(struct transport_container *tc,
+			     struct device *dev, struct device *cdev)
+{
+	struct Scsi_Host *shost = dev_to_shost(dev);
+	struct iscsi_cls_host *ihost = shost->shost_data;
+
+	if (ihost->bsg_q) {
+		bsg_remove_queue(ihost->bsg_q);
+		blk_cleanup_queue(ihost->bsg_q);
+	}
 	return 0;
 }
 
 static DECLARE_TRANSPORT_CLASS(iscsi_host_class,
 			       "iscsi_host",
 			       iscsi_setup_host,
-			       NULL,
+			       iscsi_remove_host,
 			       NULL);
 
 static DECLARE_TRANSPORT_CLASS(iscsi_session_class,
@@ -403,6 +698,19 @@ int iscsi_session_chkready(struct iscsi_cls_session *session)
 	return err;
 }
 EXPORT_SYMBOL_GPL(iscsi_session_chkready);
+
+int iscsi_is_session_online(struct iscsi_cls_session *session)
+{
+	unsigned long flags;
+	int ret = 0;
+
+	spin_lock_irqsave(&session->lock, flags);
+	if (session->state == ISCSI_SESSION_LOGGED_IN)
+		ret = 1;
+	spin_unlock_irqrestore(&session->lock, flags);
+	return ret;
+}
+EXPORT_SYMBOL_GPL(iscsi_is_session_online);
 
 static void iscsi_session_release(struct device *dev)
 {
@@ -1143,6 +1451,40 @@ void iscsi_conn_error_event(struct iscsi_cls_conn *conn, enum iscsi_err error)
 			      error);
 }
 EXPORT_SYMBOL_GPL(iscsi_conn_error_event);
+
+void iscsi_conn_login_event(struct iscsi_cls_conn *conn,
+			    enum iscsi_conn_state state)
+{
+	struct nlmsghdr *nlh;
+	struct sk_buff  *skb;
+	struct iscsi_uevent *ev;
+	struct iscsi_internal *priv;
+	int len = NLMSG_SPACE(sizeof(*ev));
+
+	priv = iscsi_if_transport_lookup(conn->transport);
+	if (!priv)
+		return;
+
+	skb = alloc_skb(len, GFP_ATOMIC);
+	if (!skb) {
+		iscsi_cls_conn_printk(KERN_ERR, conn, "gracefully ignored "
+				      "conn login (%d)\n", state);
+		return;
+	}
+
+	nlh = __nlmsg_put(skb, 0, 0, 0, (len - sizeof(*nlh)), 0);
+	ev = NLMSG_DATA(nlh);
+	ev->transport_handle = iscsi_handle(conn->transport);
+	ev->type = ISCSI_KEVENT_CONN_LOGIN_STATE;
+	ev->r.conn_login.state = state;
+	ev->r.conn_login.cid = conn->cid;
+	ev->r.conn_login.sid = iscsi_conn_get_sid(conn);
+	iscsi_multicast_skb(skb, ISCSI_NL_GRP_ISCSID, GFP_ATOMIC);
+
+	iscsi_cls_conn_printk(KERN_INFO, conn, "detected conn login (%d)\n",
+			      state);
+}
+EXPORT_SYMBOL_GPL(iscsi_conn_login_event);
 
 static int
 iscsi_if_send_reply(uint32_t group, int seq, int type, int done, int multi,
@@ -2148,6 +2490,7 @@ iscsi_register_transport(struct iscsi_transport *tt)
 
 	BUG_ON(count > ISCSI_SESSION_ATTRS);
 	priv->session_attrs[count] = NULL;
+	count = 0;
 
 	spin_lock_irqsave(&iscsi_transport_lock, flags);
 	list_add(&priv->list, &iscsi_transports);
@@ -2210,9 +2553,13 @@ static __init int iscsi_transport_init(void)
 	if (err)
 		goto unregister_transport_class;
 
-	err = transport_class_register(&iscsi_host_class);
+	err = class_register(&iscsi_iface_class);
 	if (err)
 		goto unregister_endpoint_class;
+
+	err = transport_class_register(&iscsi_host_class);
+	if (err)
+		goto unregister_iface_class;
 
 	err = transport_class_register(&iscsi_connection_class);
 	if (err)
@@ -2243,6 +2590,8 @@ unregister_conn_class:
 	transport_class_unregister(&iscsi_connection_class);
 unregister_host_class:
 	transport_class_unregister(&iscsi_host_class);
+unregister_iface_class:
+	class_unregister(&iscsi_iface_class);
 unregister_endpoint_class:
 	class_unregister(&iscsi_endpoint_class);
 unregister_transport_class:
@@ -2258,6 +2607,7 @@ static void __exit iscsi_transport_exit(void)
 	transport_class_unregister(&iscsi_session_class);
 	transport_class_unregister(&iscsi_host_class);
 	class_unregister(&iscsi_endpoint_class);
+	class_unregister(&iscsi_iface_class);
 	class_unregister(&iscsi_transport_class);
 }
 
