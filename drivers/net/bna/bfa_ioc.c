@@ -1942,18 +1942,22 @@ bfa_nw_ioc_mbox_regisr(struct bfa_ioc *ioc, enum bfi_mclass mc,
  * @param[in]	ioc	IOC instance
  * @param[i]	cmd	Mailbox command
  */
-void
-bfa_nw_ioc_mbox_queue(struct bfa_ioc *ioc, struct bfa_mbox_cmd *cmd)
+bool
+bfa_nw_ioc_mbox_queue(struct bfa_ioc *ioc, struct bfa_mbox_cmd *cmd,
+			bfa_mbox_cmd_cbfn_t cbfn, void *cbarg)
 {
 	struct bfa_ioc_mbox_mod *mod = &ioc->mbox_mod;
 	u32			stat;
+
+	cmd->cbfn = cbfn;
+	cmd->cbarg = cbarg;
 
 	/**
 	 * If a previous command is pending, queue new command
 	 */
 	if (!list_empty(&mod->cmd_q)) {
 		list_add_tail(&cmd->qe, &mod->cmd_q);
-		return;
+		return true;
 	}
 
 	/**
@@ -1962,7 +1966,7 @@ bfa_nw_ioc_mbox_queue(struct bfa_ioc *ioc, struct bfa_mbox_cmd *cmd)
 	stat = readl(ioc->ioc_regs.hfn_mbox_cmd);
 	if (stat) {
 		list_add_tail(&cmd->qe, &mod->cmd_q);
-		return;
+		return true;
 	}
 
 	/**
