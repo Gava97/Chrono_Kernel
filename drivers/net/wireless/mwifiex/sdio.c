@@ -31,9 +31,26 @@
 
 #define SDIO_VERSION	"1.0"
 
+/* The mwifiex_sdio_remove() callback function is called when
+ * user removes this module from kernel space or ejects
+ * the card from the slot. The driver handles these 2 cases
+ * differently.
+ * If the user is removing the module, the few commands (FUNC_SHUTDOWN,
+ * HS_CANCEL etc.) are sent to the firmware.
+ * If the card is removed, there is no need to send these command.
+ *
+ * The variable 'user_rmmod' is used to distinguish these two
+ * scenarios. This flag is initialized as FALSE in case the card
+ * is removed, and will be set to TRUE for module removal when
+ * module_exit function is called.
+ */
+static u8 user_rmmod;
+
 static struct mwifiex_if_ops sdio_ops;
 
 static struct semaphore add_remove_card_sem;
+
+static int mwifiex_sdio_resume(struct device *dev);
 
 /*
  * SDIO probe.
@@ -72,7 +89,8 @@ mwifiex_sdio_probe(struct sdio_func *func, const struct sdio_device_id *id)
 		return -EIO;
 	}
 
-	if (mwifiex_add_card(card, &add_remove_card_sem, &sdio_ops)) {
+	if (mwifiex_add_card(card, &add_remove_card_sem, &sdio_ops,
+			     MWIFIEX_SDIO)) {
 		pr_err("%s: add card failed\n", __func__);
 		kfree(card);
 		sdio_claim_host(func);
@@ -93,17 +111,39 @@ static void
 mwifiex_sdio_remove(struct sdio_func *func)
 {
 	struct sdio_mmc_card *card;
+	struct mwifiex_adapter *adapter;
+	int i;
 
 	pr_debug("info: SDIO func num=%d\n", func->num);
 
-	if (func) {
-		card = sdio_get_drvdata(func);
-		if (card) {
-			mwifiex_remove_card(card->adapter,
-					&add_remove_card_sem);
-			kfree(card);
-		}
+	card = sdio_get_drvdata(func);
+	if (!card)
+		return;
+
+	adapter = card->adapter;
+	if (!adapter || !adapter->priv_num)
+		return;
+
+	if (user_rmmod) {
+		if (adapter->is_suspended)
+			mwifiex_sdio_resume(adapter->dev);
+
+		for (i = 0; i < adapter->priv_num; i++)
+			if ((GET_BSS_ROLE(adapter->priv[i]) ==
+						MWIFIEX_BSS_ROLE_STA) &&
+					adapter->priv[i]->media_connected)
+				mwifiex_deauthenticate(adapter->priv[i], NULL);
+
+		mwifiex_disable_auto_ds(mwifiex_get_priv(adapter,
+							 MWIFIEX_BSS_ROLE_ANY));
+
+		mwifiex_init_shutdown_fw(mwifiex_get_priv(adapter,
+						MWIFIEX_BSS_ROLE_ANY),
+					 MWIFIEX_FUNC_SHUTDOWN);
 	}
+
+	mwifiex_remove_card(card->adapter, &add_remove_card_sem);
+	kfree(card);
 }
 
 /*
@@ -122,6 +162,7 @@ static int mwifiex_sdio_suspend(struct device *dev)
 	struct sdio_mmc_card *card;
 	struct mwifiex_adapter *adapter;
 	mmc_pm_flag_t pm_flag = 0;
+	int hs_actived = 0;
 	int i;
 	int ret = 0;
 
@@ -148,13 +189,11 @@ static int mwifiex_sdio_suspend(struct device *dev)
 	adapter = card->adapter;
 
 	/* Enable the Host Sleep */
-	if (!mwifiex_enable_hs(adapter)) {
-		dev_err(adapter->dev, "cmd: failed to suspend\n");
-		return -EFAULT;
+	hs_actived = mwifiex_enable_hs(adapter);
+	if (hs_actived) {
+		pr_debug("cmd: suspend with MMC_PM_KEEP_POWER\n");
+		ret = sdio_set_host_pm_flags(func, MMC_PM_KEEP_POWER);
 	}
-
-	dev_dbg(adapter->dev, "cmd: suspend with MMC_PM_KEEP_POWER\n");
-	ret = sdio_set_host_pm_flags(func, MMC_PM_KEEP_POWER);
 
 	/* Indicate device suspended */
 	adapter->is_suspended = true;
@@ -792,7 +831,7 @@ done:
  * The winner interface is also determined by this function.
  */
 static int mwifiex_check_fw_status(struct mwifiex_adapter *adapter,
-				   u32 poll_num, int *winner)
+				   u32 poll_num)
 {
 	int ret = 0;
 	u16 firmware_stat;
@@ -804,7 +843,7 @@ static int mwifiex_check_fw_status(struct mwifiex_adapter *adapter,
 		ret = mwifiex_sdio_read_fw_status(adapter, &firmware_stat);
 		if (ret)
 			continue;
-		if (firmware_stat == FIRMWARE_READY) {
+		if (firmware_stat == FIRMWARE_READY_SDIO) {
 			ret = 0;
 			break;
 		} else {
@@ -813,15 +852,15 @@ static int mwifiex_check_fw_status(struct mwifiex_adapter *adapter,
 		}
 	}
 
-	if (winner && ret) {
+	if (ret) {
 		if (mwifiex_read_reg
 		    (adapter, CARD_FW_STATUS0_REG, &winner_status))
 			winner_status = 0;
 
 		if (winner_status)
-			*winner = 0;
+			adapter->winner = 0;
 		else
-			*winner = 1;
+			adapter->winner = 1;
 	}
 	return ret;
 }
@@ -1284,7 +1323,7 @@ static int mwifiex_host_to_card_mp_aggr(struct mwifiex_adapter *adapter,
 				if (!(card->mp_wr_bitmap &
 						(1 << card->curr_wr_port))
 						|| !MP_TX_AGGR_BUF_HAS_ROOM(
-							card, next_pkt_len))
+						card, pkt_len + next_pkt_len))
 					f_send_aggr_buf = 1;
 			} else {
 				/* No room in Aggr buf, send it */
@@ -1375,7 +1414,7 @@ tx_curr_single:
  * the type. The firmware handles the packets based upon this set type.
  */
 static int mwifiex_sdio_host_to_card(struct mwifiex_adapter *adapter,
-				     u8 type, u8 *payload, u32 pkt_len,
+				     u8 type, struct sk_buff *skb,
 				     struct mwifiex_tx_param *tx_param)
 {
 	struct sdio_mmc_card *card = adapter->card;
@@ -1383,12 +1422,14 @@ static int mwifiex_sdio_host_to_card(struct mwifiex_adapter *adapter,
 	u32 buf_block_len;
 	u32 blk_size;
 	u8 port = CTRL_PORT;
+	u8 *payload = (u8 *)skb->data;
+	u32 pkt_len = skb->len;
 
 	/* Allocate buffer and copy payload */
 	blk_size = MWIFIEX_SDIO_BLOCK_SIZE;
 	buf_block_len = (pkt_len + blk_size - 1) / blk_size;
-	*(__le16 *)&payload[0] = cpu_to_le16((u16)pkt_len);
-	*(__le16 *)&payload[2] = cpu_to_le16(type);
+	*(u16 *) &payload[0] = (u16) pkt_len;
+	*(u16 *) &payload[2] = type;
 
 	/*
 	 * This is SDIO specific header
@@ -1684,6 +1725,8 @@ static struct mwifiex_if_ops sdio_ops = {
 	/* SDIO specific */
 	.update_mp_end_port = mwifiex_update_mp_end_port,
 	.cleanup_mpa_buf = mwifiex_cleanup_mpa_buf,
+	.cmdrsp_complete = mwifiex_sdio_cmdrsp_complete,
+	.event_complete = mwifiex_sdio_event_complete,
 };
 
 /*
@@ -1696,6 +1739,9 @@ static int
 mwifiex_sdio_init_module(void)
 {
 	sema_init(&add_remove_card_sem, 1);
+
+	/* Clear the flag in case user removes the card. */
+	user_rmmod = 0;
 
 	return sdio_register_driver(&mwifiex_sdio);
 }
@@ -1712,32 +1758,12 @@ mwifiex_sdio_init_module(void)
 static void
 mwifiex_sdio_cleanup_module(void)
 {
-	struct mwifiex_adapter *adapter = g_adapter;
-	int i;
+	if (!down_interruptible(&add_remove_card_sem))
+		up(&add_remove_card_sem);
 
-	if (down_interruptible(&add_remove_card_sem))
-		goto exit_sem_err;
+	/* Set the flag as user is removing this module. */
+	user_rmmod = 1;
 
-	if (!adapter || !adapter->priv_num)
-		goto exit;
-
-	if (adapter->is_suspended)
-		mwifiex_sdio_resume(adapter->dev);
-
-	for (i = 0; i < adapter->priv_num; i++)
-		if ((GET_BSS_ROLE(adapter->priv[i]) == MWIFIEX_BSS_ROLE_STA) &&
-		    adapter->priv[i]->media_connected)
-			mwifiex_deauthenticate(adapter->priv[i], NULL);
-
-	if (!adapter->surprise_removed)
-		mwifiex_init_shutdown_fw(mwifiex_get_priv(adapter,
-							  MWIFIEX_BSS_ROLE_ANY),
-					 MWIFIEX_FUNC_SHUTDOWN);
-
-exit:
-	up(&add_remove_card_sem);
-
-exit_sem_err:
 	sdio_unregister_driver(&mwifiex_sdio);
 }
 
