@@ -120,6 +120,9 @@ struct wm831x_pdata {
 	/** Put the /IRQ line into CMOS mode */
 	bool irq_cmos;
 
+	/** The driver should initiate a power off sequence during shutdown */
+	bool soft_shutdown;
+
 	int irq_base;
 	int gpio_base;
 	int gpio_defaults[WM831X_GPIO_NUM];
