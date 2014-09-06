@@ -927,36 +927,6 @@ enum soc_au1200_ints {
 #define SYS_RTCMATCH2		(SYS_BASE + 0x54)
 #define SYS_RTCREAD		(SYS_BASE + 0x58)
 
-/* I2S Controller */
-#define I2S_DATA		0xB1000000
-#  define I2S_DATA_MASK 	0xffffff
-#define I2S_CONFIG		0xB1000004
-#  define I2S_CONFIG_XU 	(1 << 25)
-#  define I2S_CONFIG_XO 	(1 << 24)
-#  define I2S_CONFIG_RU 	(1 << 23)
-#  define I2S_CONFIG_RO 	(1 << 22)
-#  define I2S_CONFIG_TR 	(1 << 21)
-#  define I2S_CONFIG_TE 	(1 << 20)
-#  define I2S_CONFIG_TF 	(1 << 19)
-#  define I2S_CONFIG_RR 	(1 << 18)
-#  define I2S_CONFIG_RE 	(1 << 17)
-#  define I2S_CONFIG_RF 	(1 << 16)
-#  define I2S_CONFIG_PD 	(1 << 11)
-#  define I2S_CONFIG_LB 	(1 << 10)
-#  define I2S_CONFIG_IC 	(1 << 9)
-#  define I2S_CONFIG_FM_BIT	7
-#  define I2S_CONFIG_FM_MASK	(0x3 << I2S_CONFIG_FM_BIT)
-#    define I2S_CONFIG_FM_I2S	(0x0 << I2S_CONFIG_FM_BIT)
-#    define I2S_CONFIG_FM_LJ	(0x1 << I2S_CONFIG_FM_BIT)
-#    define I2S_CONFIG_FM_RJ	(0x2 << I2S_CONFIG_FM_BIT)
-#  define I2S_CONFIG_TN 	(1 << 6)
-#  define I2S_CONFIG_RN 	(1 << 5)
-#  define I2S_CONFIG_SZ_BIT	0
-#  define I2S_CONFIG_SZ_MASK	(0x1F << I2S_CONFIG_SZ_BIT)
-
-#define I2S_CONTROL		0xB1000008
-#  define I2S_CONTROL_D 	(1 << 1)
-#  define I2S_CONTROL_CE	(1 << 0)
 
 /* USB Host Controller */
 #ifndef USB_OHCI_LEN
@@ -1435,37 +1405,6 @@ enum soc_au1200_ints {
 #  define SYS_CS_MUX_FQ5	0x7
 #define SYS_CPUPLL		0xB1900060
 #define SYS_AUXPLL		0xB1900064
-
-/* AC97 Controller */
-#define AC97C_CONFIG		0xB0000000
-#  define AC97C_RECV_SLOTS_BIT	13
-#  define AC97C_RECV_SLOTS_MASK (0x3ff << AC97C_RECV_SLOTS_BIT)
-#  define AC97C_XMIT_SLOTS_BIT	3
-#  define AC97C_XMIT_SLOTS_MASK (0x3ff << AC97C_XMIT_SLOTS_BIT)
-#  define AC97C_SG		(1 << 2)
-#  define AC97C_SYNC		(1 << 1)
-#  define AC97C_RESET		(1 << 0)
-#define AC97C_STATUS		0xB0000004
-#  define AC97C_XU		(1 << 11)
-#  define AC97C_XO		(1 << 10)
-#  define AC97C_RU		(1 << 9)
-#  define AC97C_RO		(1 << 8)
-#  define AC97C_READY		(1 << 7)
-#  define AC97C_CP		(1 << 6)
-#  define AC97C_TR		(1 << 5)
-#  define AC97C_TE		(1 << 4)
-#  define AC97C_TF		(1 << 3)
-#  define AC97C_RR		(1 << 2)
-#  define AC97C_RE		(1 << 1)
-#  define AC97C_RF		(1 << 0)
-#define AC97C_DATA		0xB0000008
-#define AC97C_CMD		0xB000000C
-#  define AC97C_WD_BIT		16
-#  define AC97C_READ		(1 << 7)
-#  define AC97C_INDEX_MASK	0x7f
-#define AC97C_CNTRL		0xB0000010
-#  define AC97C_RS		(1 << 1)
-#  define AC97C_CE		(1 << 0)
 
 #if defined(CONFIG_SOC_AU1500) || defined(CONFIG_SOC_AU1550)
 /* Au1500 PCI Controller */
