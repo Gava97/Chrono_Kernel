@@ -35,6 +35,7 @@ enum ds_type {
 	ds_3231,
 	m41t00,
 	rx_8025,
+	mcp7941x,
 	// rs5c372 too?  different address...
 };
 
@@ -42,6 +43,7 @@ enum ds_type {
 /* RTC registers don't differ much, except for the century flag */
 #define DS1307_REG_SECS		0x00	/* 00-59 */
 #	define DS1307_BIT_CH		0x80
+#	define MCP7941X_BIT_ST		0x80
 #	define DS1340_BIT_nEOSC		0x80
 #define DS1307_REG_MIN		0x01	/* 00-59 */
 #define DS1307_REG_HOUR		0x02	/* 00-23, or 1-12{am,pm} */
@@ -50,6 +52,7 @@ enum ds_type {
 #	define DS1340_BIT_CENTURY_EN	0x80	/* in REG_HOUR */
 #	define DS1340_BIT_CENTURY	0x40	/* in REG_HOUR */
 #define DS1307_REG_WDAY		0x03	/* 01-07 */
+#	define MCP7941X_BIT_VBATEN	0x08
 #define DS1307_REG_MDAY		0x04	/* 01-31 */
 #define DS1307_REG_MONTH	0x05	/* 01-12 */
 #	define DS1337_BIT_CENTURY	0x80	/* in REG_MONTH */
@@ -138,6 +141,8 @@ static const struct chip_desc chips[] = {
 [m41t00] = {
 },
 [rx_8025] = {
+},
+[mcp7941x] = {
 }, };
 
 static const struct i2c_device_id ds1307_id[] = {
@@ -151,6 +156,7 @@ static const struct i2c_device_id ds1307_id[] = {
 	{ "m41t00", m41t00 },
 	{ "pt7c4338", ds_1307 },
 	{ "rx8025", rx_8025 },
+	{ "mcp7941x", mcp7941x },
 	{ }
 };
 MODULE_DEVICE_TABLE(i2c, ds1307_id);
@@ -364,6 +370,10 @@ static int ds1307_set_time(struct device *dev, struct rtc_time *t)
 	case ds_1340:
 		buf[DS1307_REG_HOUR] |= DS1340_BIT_CENTURY_EN
 				| DS1340_BIT_CENTURY;
+		break;
+	case mcp7941x:
+		buf[DS1307_REG_SECS] |= MCP7941X_BIT_ST;
+		buf[DS1307_REG_WDAY] |= MCP7941X_BIT_VBATEN;
 		break;
 	default:
 		break;
@@ -808,6 +818,23 @@ read_rtc:
 			i2c_smbus_write_byte_data(client, DS1340_REG_FLAG, 0);
 			dev_warn(&client->dev, "SET TIME!\n");
 		}
+		break;
+	case mcp7941x:
+		/* make sure that the backup battery is enabled */
+		if (!(ds1307->regs[DS1307_REG_WDAY] & MCP7941X_BIT_VBATEN)) {
+			i2c_smbus_write_byte_data(client, DS1307_REG_WDAY,
+					ds1307->regs[DS1307_REG_WDAY]
+					| MCP7941X_BIT_VBATEN);
+		}
+
+		/* clock halted?  turn it on, so clock can tick. */
+		if (!(tmp & MCP7941X_BIT_ST)) {
+			i2c_smbus_write_byte_data(client, DS1307_REG_SECS,
+					MCP7941X_BIT_ST);
+			dev_warn(&client->dev, "SET TIME!\n");
+			goto read_rtc;
+		}
+
 		break;
 	case rx_8025:
 	case ds_1337:
