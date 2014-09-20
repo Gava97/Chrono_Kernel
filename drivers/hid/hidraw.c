@@ -94,6 +94,7 @@ static ssize_t hidraw_read(struct file *file, char __user *buffer, size_t count,
 		ret = len;
 
 		kfree(list->buffer[list->tail].value);
+		list->buffer[list->tail].value = NULL;
 		list->tail = (list->tail + 1) & (HIDRAW_BUFFER_SIZE - 1);
 	}
 out:
@@ -295,6 +296,7 @@ static int hidraw_release(struct inode * inode, struct file * file)
 	struct hidraw *dev;
 	struct hidraw_list *list = file->private_data;
 	int ret;
+	int i;
 
 	mutex_lock(&minors_lock);
 	if (!hidraw_table[minor]) {
@@ -312,6 +314,9 @@ static int hidraw_release(struct inode * inode, struct file * file)
 			kfree(list->hidraw);
 		}
 	}
+
+	for (i = 0; i < HIDRAW_BUFFER_SIZE; ++i)
+		kfree(list->buffer[i].value);
 	kfree(list);
 	ret = 0;
 unlock:
@@ -440,9 +445,14 @@ void hidraw_report_event(struct hid_device *hid, u8 *data, int len)
 	struct hidraw_list *list;
 
 	list_for_each_entry(list, &dev->list, node) {
+		int new_head = (list->head + 1) & (HIDRAW_BUFFER_SIZE - 1);
+
+		if (new_head == list->tail)
+			continue;
+
 		list->buffer[list->head].value = kmemdup(data, len, GFP_ATOMIC);
 		list->buffer[list->head].len = len;
-		list->head = (list->head + 1) & (HIDRAW_BUFFER_SIZE - 1);
+		list->head = new_head;
 		kill_fasync(&list->fasync, SIGIO, POLL_IN);
 	}
 
