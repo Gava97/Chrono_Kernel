@@ -3947,6 +3947,12 @@ static void btrfs_dentry_release(struct dentry *dentry)
 		kfree(dentry->d_fsdata);
 }
 
+static void btrfs_dentry_release(struct dentry *dentry)
+{
+	if (dentry->d_fsdata)
+		kfree(dentry->d_fsdata);
+}
+
 static struct dentry *btrfs_lookup(struct inode *dir, struct dentry *dentry,
 				   struct nameidata *nd)
 {
