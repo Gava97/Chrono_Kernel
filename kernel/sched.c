@@ -472,10 +472,10 @@ static void init_cfs_bandwidth(struct cfs_bandwidth *cfs_b)
 	cfs_b->slack_timer.function = sched_cfs_slack_timer;
 }
 
-static void init_cfs_rq_runtime(struct cfs_rq *cfs_rq)
+static void init_rt_rq_runtime(struct rt_rq *rt_rq)
 {
-	cfs_rq->runtime_enabled = 0;
-	INIT_LIST_HEAD(&cfs_rq->throttled_list);
+	rt_rq->runtime_enabled = 0;
+	INIT_LIST_HEAD(&rt_rq->throttled_list);
 }
 
 /* requires cfs_b->lock, may release to reprogram timer */
@@ -508,7 +508,7 @@ static void destroy_cfs_bandwidth(struct cfs_bandwidth *cfs_b)
 	hrtimer_cancel(&cfs_b->slack_timer);
 }
 #else
-static void init_cfs_rq_runtime(struct cfs_rq *cfs_rq) {}
+static void init_rt_rq_runtime(struct rt_rq *rt_rq) {}
 static void init_cfs_bandwidth(struct cfs_bandwidth *cfs_b) {}
 static void destroy_cfs_bandwidth(struct cfs_bandwidth *cfs_b) {}
 
@@ -8274,8 +8274,6 @@ static void init_rt_rq(struct rt_rq *rt_rq, struct rq *rq)
 	rt_rq->overloaded = 0;
 	plist_head_init(&rt_rq->pushable_tasks);
 #endif
-	init_cfs_rq_runtime(cfs_rq);
-
 	rt_rq->rt_time = 0;
 	rt_rq->rt_throttled = 0;
 	rt_rq->rt_runtime = 0;
