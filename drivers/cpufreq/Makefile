@@ -26,6 +26,7 @@ obj-$(CONFIG_CPU_FREQ_GOV_LULZACTIVEQ)	+= cpufreq_lulzactiveq.o
 obj-$(CONFIG_CPU_FREQ_GOV_INTELLIDEMAND) += cpufreq_intellidemand.o
 obj-$(CONFIG_CPU_FREQ_GOV_INTELLIACTIVE) += cpufreq_intelliactive.o
 
+obj-$(CONFIG_CPU_FREQ_LIMITS_ON_SCREENOFF) += cpufreq_limits_on_screenoff.o
 
 # CPUfreq cross-arch helpers
 obj-$(CONFIG_CPU_FREQ_TABLE)		+= freq_table.o
