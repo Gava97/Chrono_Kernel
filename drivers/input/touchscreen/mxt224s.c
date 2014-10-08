@@ -156,6 +156,8 @@
 #define REFERENCE_OFFSET		16384
 #define DELTA_OFFSET			0
 
+#define SCREENOFF_CPUFREQ_LIMITS
+
 enum {
 	IN_BUILT_IN = 0,
 	IN_BOARD,
@@ -477,6 +479,16 @@ static void mxt_late_resume(struct early_suspend *);
 #ifdef CONFIG_USB_SWITCHER
 extern int micro_usb_register_usb_notifier(struct notifier_block *nb);
 extern int use_ab8505_iddet;
+#endif
+
+/*
+ * ChronoMonochome: add in-touchscreen support for screenoff cpufreq limits feature
+ */
+#ifdef SCREENOFF_CPUFREQ_LIMITS
+static bool is_suspend;
+bool mxt244s_is_suspend(void) {
+	return is_suspend;
+}
 #endif
 
 static int mxt_read_mem(struct mxt_data *data, u16 reg, u8 len, u8 *buf)
@@ -2213,6 +2225,7 @@ static int mxt_initialize(struct mxt_data *data, bool probe_time)
 		dev_err(&client->dev, "fail to get obj tbl (%d)", ret);
 
 force_fw_update:
+/*
 	ret = mxt_load_fw(data, IN_HEADER);
 	if (ret < 0) {
 		dev_err(&client->dev, "fail to load fw (%d)", ret);
@@ -2223,6 +2236,8 @@ force_fw_update:
 
 	if (!probe_time || fw_empty || fw_latest[0] != data->info.ver ||
 	    fw_latest[1] != data->info.build) {
+*/
+	if (0) {
 
 		if (!fw_empty) {
 			ret = mxt_enter_bootloader(data);
@@ -2431,12 +2446,18 @@ out:
 static void mxt_early_suspend(struct early_suspend *h)
 {
 	struct mxt_data *data = container_of(h, struct mxt_data, early_suspend);
+#ifdef SCREENOFF_CPUFREQ_LIMITS
+	is_suspend = true;
+#endif
 	mxt_suspend(&data->client->dev);
 }
 
 static void mxt_late_resume(struct early_suspend *h)
 {
 	struct mxt_data *data = container_of(h, struct mxt_data, early_suspend);
+#ifdef SCREENOFF_CPUFREQ_LIMITS
+	is_suspend = false;
+#endif
 	mxt_resume(&data->client->dev);
 }
 #endif
@@ -3792,6 +3813,7 @@ err_create_mem_access:
 static void mxt_check_default_ta_status(unsigned long __data)
 {
 	struct mxt_data *data = (struct mxt_data *)__data;
+
 
 	dev_err(&data->client->dev, "initial_cable_status=0x%x\n",
 		*data->pdata->initial_cable_status);
