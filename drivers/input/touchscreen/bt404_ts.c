@@ -52,6 +52,9 @@
 #ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
 #include <linux/input/sweep2wake.h>
 #endif
+#ifdef CONFIG_TOUCHSCREEN_DOUBLETAP2WAKE
+#include <linux/input/doubletap2wake.h>
+#endif
 #ifdef TSP_FACTORY
 #include <linux/list.h>
 #endif
@@ -1555,8 +1558,10 @@ static void bt404_ts_report_touch_data(struct bt404_ts_data *data,
 #endif
 			prev->coord[i].sub_status &= ~(0x01);
 #ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
-			barrier[0] = false;
-			barrier[1] = false;
+			detect_sweep2wake(cur->coord[i].x, cur->coord[i].y, false);
+#endif
+#ifdef CONFIG_TOUCHSCREEN_DOUBLETAP2WAKE
+			detect_doubletap2wake(cur->coord[i].x, cur->coord[i].y, false);
 #endif
 			input_mt_slot(data->input_dev_ts, i);
 			input_mt_report_slot_state(data->input_dev_ts,
@@ -1633,6 +1638,9 @@ static void bt404_ts_report_touch_data(struct bt404_ts_data *data,
 							cur->coord[i].width);
 #ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
 			detect_sweep2wake(cur->coord[i].x, cur->coord[i].y, true);
+#endif
+#ifdef CONFIG_TOUCHSCREEN_DOUBLETAP2WAKE
+			detect_doubletap2wake(cur->coord[i].x, cur->coord[i].y, true);
 #endif
 		}
 	}
@@ -4340,8 +4348,16 @@ err_i2c:
 #if defined(CONFIG_PM) || defined(CONFIG_HAS_EARLYSUSPEND)
 static int bt404_ts_suspend(struct device *dev)
 {
+#if defined (CONFIG_TOUCHSCREEN_SWEEP2WAKE) && defined (CONFIG_TOUCHSCREEN_DOUBLETAP2WAKE)
+	if(s2w_switch || dt2w_switch)
+		return 0;
+#elif CONFIG_TOUCHSCREEN_SWEEP2WAKE
 	if(s2w_switch)
 		return 0;
+#elif CONFIG_TOUCHSCREEN_DOUBLETAP2WAKE
+	if(dt2w_switch)
+		return 0;
+#endif
 
 	struct i2c_client *client = to_i2c_client(dev);
 	struct bt404_ts_data *data = i2c_get_clientdata(client);
@@ -4389,8 +4405,16 @@ out:
 
 static int bt404_ts_resume(struct device *dev)
 {
+#if defined (CONFIG_TOUCHSCREEN_SWEEP2WAKE) && defined (CONFIG_TOUCHSCREEN_DOUBLETAP2WAKE)
+	if(s2w_switch || dt2w_switch)
+		return 0;
+#elif CONFIG_TOUCHSCREEN_SWEEP2WAKE
 	if(s2w_switch)
 		return 0;
+#elif CONFIG_TOUCHSCREEN_DOUBLETAP2WAKE
+	if(dt2w_switch)
+		return 0;
+#endif
 
 	struct i2c_client *client = to_i2c_client(dev);
 	struct bt404_ts_data *data = i2c_get_clientdata(client);
@@ -4433,13 +4457,23 @@ out:
 #ifdef CONFIG_HAS_EARLYSUSPEND
 static void bt404_ts_late_resume(struct early_suspend *h)
 {
-#ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
+#if defined(CONFIG_TOUCHSCREEN_SWEEP2WAKE) && defined(CONFIG_TOUCHSCREEN_DOUBLETAP2WAKE)
+	if(s2w_switch || dt2w_switch){
+		printk("==bt404_ts_resume=canceled for s2w or dt2w\n");
+		s2w_set_scr_suspended(false);
+		dt2w_set_scr_suspended(false);
+		return;
+	}
+#elif CONFIG_TOUCHSCREEN_SWEEP2WAKE
 	if(s2w_switch){
-		barrier[0] = false;
-		barrier[1] = false;
-		exec_count = true;
 		printk("==bt404_ts_resume=canceled for s2w\n");
-		scr_suspended = false;
+		s2w_set_scr_suspended(false);
+		return;
+	}
+#elif CONFIG_TOUCHSCREEN_DOUBLETAP2WAKE
+	if(s2w_switch){
+		printk("==bt404_ts_resume=canceled for dt2w\n");
+		dt2w_set_scr_suspended(false);
 		return;
 	}
 #endif
@@ -4454,16 +4488,34 @@ static void bt404_ts_late_resume(struct early_suspend *h)
 #endif
 	bt404_ts_resume(&data->client->dev);
 #ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
-	scr_suspended = false;
+	s2w_set_scr_suspended(false);
+#endif
+#ifdef CONFIG_TOUCHSCREEN_DOUBLETAP2WAKE
+	dt2w_set_scr_suspended(false);
 #endif
 }
 
 static void bt404_ts_early_suspend(struct early_suspend *h)
 {
 #ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
-	scr_suspended = true;
+	s2w_set_scr_suspended(true);
+#endif
+#ifdef CONFIG_TOUCHSCREEN_DOUBLETAP2WAKE
+	dt2w_set_scr_suspended(true);
+#endif
+#if defined (CONFIG_TOUCHSCREEN_SWEEP2WAKE) && defined (CONFIG_TOUCHSCREEN_DOUBLETAP2WAKE)
+	if(s2w_switch || dt2w_switch){
+		printk("==bt404_ts_suspend=canceled for s2w or dt2w\n");
+		return;
+	}
+#elif CONFIG_TOUCHSCREEN_SWEEP2WAKE
 	if(s2w_switch){
 		printk("==bt404_ts_suspend=canceled for s2w\n");
+		return;
+	}
+#elif CONFIG_TOUCHSCREEN_DOUBLETAP2WAKE
+	if(dt2w_switch){
+		printk("==bt404_ts_suspend=canceled for dt2w\n");
 		return;
 	}
 #endif
