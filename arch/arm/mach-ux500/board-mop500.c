@@ -597,7 +597,12 @@ failed:
 
 static void mop500_tc35892_init(struct tc3589x *tc3589x, unsigned int base)
 {
-	mop500_sdi_tc35892_init();
+	struct device *parent = NULL;
+#if 0
+	/* FIXME: Is the sdi actually part of tc3589x? */
+	parent = tc3589x->dev;
+#endif
+	mop500_sdi_tc35892_init(parent);
 }
 
 static struct tc3589x_gpio_platform_data mop500_tc35892_gpio_data = {
@@ -735,12 +740,12 @@ U8500_I2C_CONTROLLER(1, 0xe, 1, 8, 400000, 200, I2C_FREQ_MODE_FAST);
 U8500_I2C_CONTROLLER(2,	0xe, 1, 8, 400000, 200, I2C_FREQ_MODE_FAST);
 U8500_I2C_CONTROLLER(3,	0xe, 1, 8, 400000, 200, I2C_FREQ_MODE_FAST);
 
-static void __init mop500_i2c_init(void)
+static void __init mop500_i2c_init(struct device *parent)
 {
-	db8500_add_i2c0(&u8500_i2c0_data);
-	db8500_add_i2c1(&u8500_i2c1_data);
-	db8500_add_i2c2(&u8500_i2c2_data);
-	db8500_add_i2c3(&u8500_i2c3_data);
+	db8500_add_i2c0(parent, &u8500_i2c0_data);
+	db8500_add_i2c1(parent, &u8500_i2c1_data);
+	db8500_add_i2c2(parent, &u8500_i2c2_data);
+	db8500_add_i2c3(parent, &u8500_i2c3_data);
 }
 
 #ifdef CONFIG_LEDS_PWM
@@ -1004,9 +1009,9 @@ static struct pl022_ssp_controller ssp0_platform_data = {
 	.num_chipselect = NUM_SSP_CLIENTS,
 };
 
-static void __init mop500_spi_init(void)
+static void __init mop500_spi_init(struct device *parent)
 {
-	db8500_add_ssp0(&ssp0_platform_data);
+	db8500_add_ssp0(parent, &ssp0_platform_data);
 }
 
 #ifdef CONFIG_STE_DMA40_REMOVE
@@ -1139,11 +1144,11 @@ static struct amba_pl011_data uart2_plat = {
 	.reset = u8500_uart2_reset,
 };
 
-static void __init mop500_uart_init(void)
+static void __init mop500_uart_init(struct device *parent)
 {
-	db8500_add_uart0(&uart0_plat);
-	db8500_add_uart1(&uart1_plat);
-	db8500_add_uart2(&uart2_plat);
+	db8500_add_uart0(parent, &uart0_plat);
+	db8500_add_uart1(parent, &uart1_plat);
+	db8500_add_uart2(parent, &uart2_plat);
 }
 
 static void __init u8500_cryp1_hash1_init(void)
@@ -1191,6 +1196,7 @@ static void fixup_ab8505_gpio(void)
 
 static void __init mop500_init_machine(void)
 {
+	struct device *parent = NULL;
 	int i2c0_devs;
 
 	accessory_detect_config();

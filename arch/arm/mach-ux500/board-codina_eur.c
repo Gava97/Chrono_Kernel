@@ -2274,12 +2274,12 @@ void codina_backlight_on_off(bool on)
 		codina_bl_platform_info.bl_on_off(codina_bl_platform_info.bd, on);
 }
 
-static void __init codina_i2c_init(void)
+static void __init codina_i2c_init(struct device *parent)
 {
-	db8500_add_i2c0(&codina_i2c0_data);
-	db8500_add_i2c1(&codina_i2c1_data);
-	db8500_add_i2c2(&codina_i2c2_data);
-	db8500_add_i2c3(&codina_i2c3_data);
+	db8500_add_i2c0(parent, &codina_i2c0_data);
+	db8500_add_i2c1(parent, &codina_i2c1_data);
+	db8500_add_i2c2(parent, &codina_i2c2_data);
+	db8500_add_i2c3(parent, &codina_i2c3_data);
 
 	i2c_register_board_info(0,
 		ARRAY_AND_SIZE(codina_r0_0_i2c0_devices));
@@ -2355,28 +2355,29 @@ static void fetch_usb_serial_no(int len)
 #endif
 
 
-static void __init codina_spi_init(void)
+static void __init codina_spi_init(struct device *parent)
 {
-	db8500_add_spi0(&codina_spi0_data);
+	db8500_add_spi0(parent, &codina_spi0_data);
 	spi_register_board_info(spi_board_info, ARRAY_SIZE(spi_board_info));
 }
 
-static void __init codina_uart_init(void)
+static void __init codina_uart_init(struct device *parent)
 {
-	db8500_add_uart0(&uart0_plat);
-	db8500_add_uart1(&uart1_plat);
-	db8500_add_uart2(&uart2_plat);
+	db8500_add_uart0(parent, &uart0_plat);
+	db8500_add_uart1(parent, &uart1_plat);
+	db8500_add_uart2(parent, &uart2_plat);
 }
 
-static void __init u8500_cryp1_hash1_init(void)
+static void __init u8500_cryp1_hash1_init(struct device *parent)
 {
-	db8500_add_cryp1(&u8500_cryp1_platform_data);
-	db8500_add_hash1(&u8500_hash1_platform_data);
+	db8500_add_cryp1(parent, &u8500_cryp1_platform_data);
+	db8500_add_hash1(parent, &u8500_hash1_platform_data);
 }
 
 
 static void __init codina_init_machine(void)
 {
+	struct device *parent = NULL;
 	sec_common_init();
 
 	sec_common_init_early();
@@ -2389,7 +2390,7 @@ static void __init codina_init_machine(void)
 	platform_device_register(&db8500_prcmu_device);
 	platform_device_register(&u8500_usecase_gov_device);
 
-	u8500_init_devices();
+	parent = u8500_init_devices();
 
 #ifdef CONFIG_USB_ANDROID
 	fetch_usb_serial_no(USB_SERIAL_NUMBER_LEN);
@@ -2433,11 +2434,11 @@ static void __init codina_init_machine(void)
 	bt404_ts_init();
 #endif
 
-	u8500_cryp1_hash1_init();
-	codina_i2c_init();
-	codina_spi_init();
-	mop500_msp_init();		/* generic for now */
-	codina_uart_init();
+	u8500_cryp1_hash1_init(parent);
+	codina_i2c_init(parent);
+	codina_spi_init(parent);
+	mop500_msp_init(parent);		/* generic for now */
+	codina_uart_init(parent);
 
 #ifdef CONFIG_STE_WLAN
 	mop500_wlan_init();

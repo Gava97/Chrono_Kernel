@@ -244,15 +244,6 @@ static void __init db8500_icn_init(void)
 }
 
 static struct platform_device *platform_devs[] __initdata = {
-	&u8500_gpio_devs[0],
-	&u8500_gpio_devs[1],
-	&u8500_gpio_devs[2],
-	&u8500_gpio_devs[3],
-	&u8500_gpio_devs[4],
-	&u8500_gpio_devs[5],
-	&u8500_gpio_devs[6],
-	&u8500_gpio_devs[7],
-	&u8500_gpio_devs[8],
 	&db8500_pmu_device,
 };
 
@@ -278,10 +269,33 @@ static int usb_db8500_tx_dma_cfg[] = {
 	DB8500_DMA_DEV39_USB_OTG_OEP_8
 };
 
+static resource_size_t __initdata db8500_gpio_base[] = {
+	U8500_GPIOBANK0_BASE,
+	U8500_GPIOBANK1_BASE,
+	U8500_GPIOBANK2_BASE,
+	U8500_GPIOBANK3_BASE,
+	U8500_GPIOBANK4_BASE,
+	U8500_GPIOBANK5_BASE,
+	U8500_GPIOBANK6_BASE,
+	U8500_GPIOBANK7_BASE,
+	U8500_GPIOBANK8_BASE,
+};
+
+static void __init db8500_add_gpios(struct device *parent)
+{
+	struct nmk_gpio_platform_data pdata = {
+	/* No custom data yet */
+	};
+
+	dbx500_add_gpios(parent, ARRAY_AND_SIZE(db8500_gpio_base),
+	IRQ_DB8500_GPIO0, &pdata);
+}
+
+
 /*
  * This function is called from the board init
  */
-void __init u8500_init_devices(void)
+struct device* __init u8500_init_devices(void)
 {
 	ux500_init_devices();
 
@@ -290,10 +304,10 @@ void __init u8500_init_devices(void)
 	platform_device_register(&ux500_stm_device);
 #endif
 
-	db8500_dma_init();
-	db8500_icn_init();
-	db8500_add_rtc();
-	db8500_add_usb(usb_db8500_rx_dma_cfg, usb_db8500_tx_dma_cfg);
+	/* FIXME: First parameter to be a real parent. */
+	db8500_add_rtc(NULL);
+	db8500_add_gpios(NULL);
+	db8500_add_usb(NULL, usb_db8500_rx_dma_cfg, usb_db8500_tx_dma_cfg);
 
 	platform_add_devices(platform_devs, ARRAY_SIZE(platform_devs));
 

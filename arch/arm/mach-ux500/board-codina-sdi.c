@@ -241,7 +241,7 @@ static struct mmci_platform_data ssg_sdi0_data = {
 #endif
 };
 
-static void __init sdi0_configure(void)
+static void __init sdi0_configure(struct device *parent)
 {
 	int ret;
 
@@ -566,7 +566,7 @@ static void codina_wifi_init(void)
 	return;
 }
 
-static void codina_sdi2_init(void)
+static void codina_sdi2_init(struct device *parent)
 {
 	int32_t status = 0;
 
@@ -607,7 +607,7 @@ int u8500_wifi_power(int on, int flag)
 	return 0;
 }
 
-static int __init ssg_sdi_init(void)
+static int __init ssg_sdi_init(struct device *parent)
 {
 //	ssg_sdi2_data.card_sleep_on_suspend = true;
 #ifndef CONFIG_STE_WLAN
@@ -616,16 +616,16 @@ static int __init ssg_sdi_init(void)
 	/* v2 has a new version of this block that need to be forced */
 	u32 periphid = 0x10480180;
 
-	db8500_add_sdi2(&ssg_sdi2_data, periphid);
-	codina_sdi2_init();
+	db8500_add_sdi2(parent, &ssg_sdi2_data, periphid);
+	codina_sdi2_init(parent);
 
 	if ((sec_debug_settings & SEC_DBG_STM_VIA_SD_OPTS) == 0) {
 		/* not tracing via SDI0 pins, so can enable SDI0 */
-		sdi0_configure();
-		db8500_add_sdi0(&ssg_sdi0_data, periphid);
+		sdi0_configure(parent);
+		db8500_add_sdi0(parent, &ssg_sdi0_data, periphid);
 	}
 
-	db8500_add_sdi1(&ssg_sdi1_data, periphid);
+	db8500_add_sdi1(parent, &ssg_sdi1_data, periphid);
 
 #ifndef CONFIG_STE_WLAN
 	/* BCM */

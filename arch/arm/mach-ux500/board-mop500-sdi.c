@@ -330,7 +330,7 @@ static struct mmci_platform_data mop500_sdi4_data = {
 #endif
 };
 
-void __init mop500_sdi_init(void)
+void __init mop500_sdi_init(struct device *parent)
 {
 	/* v2 has a new version of this block that need to be forced */
 	u32 periphid = 0x10480180;

@@ -96,12 +96,12 @@
 
 struct i2c_board_info;
 
-extern void mop500_sdi_init(void);
-extern void mop500_sdi_tc35892_init(void);
-extern int mop500_get_acc_id(void);
+extern void mop500_sdi_init(struct device *parent);
+extern void mop500_sdi_tc35892_init(struct device *parent);
+extern int mop500_get_acc_id(struct device *parent);
 void __init mop500_u8500uib_init(void);
 void __init mop500_stuib_init(void);
-void __init mop500_msp_init(void);
+void __init mop500_msp_init(struct device *parent);
 void __init mop500_pins_init(void);
 void __init mop500_vibra_init(void);
 void mop500_cyttsp_init(void);
