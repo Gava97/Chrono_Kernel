@@ -5,12 +5,21 @@
 #include <linux/radix-tree.h>
 #include <linux/rcupdate.h>
 
+struct cfq_ttime {
+	unsigned long last_end_request; 
+	unsigned long ttime_total;
+	unsigned long ttime_samples;
+	unsigned long ttime_mean;
+};
+
 struct cfq_io_context {
 	void *key;
 
 	void *cfqq[2];
 
 	struct io_context *ioc;	
+	
+	struct cfq_ttime ttime;
 
 	unsigned long last_end_request;
 
@@ -32,16 +41,6 @@ struct cfq_io_context {
 	void (*exit)(struct io_context *); /* called on task exit */
 
 	struct rcu_head rcu_head;
-};
-
-/*
- * Indexes into the ioprio_changed bitmap.  A bit set indicates that
- * the corresponding I/O scheduler needs to see a ioprio update.
- */
-enum {
-	IOC_CFQ_IOPRIO_CHANGED,
-	IOC_BFQ_IOPRIO_CHANGED,
-	IOC_IOPRIO_CHANGED_BITS
 };
 
 /*
