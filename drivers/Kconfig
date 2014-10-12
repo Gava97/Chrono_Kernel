@@ -150,3 +150,5 @@ source "drivers/interceptor/Kconfig"
 
 source "drivers/virt/Kconfig"
 
+endmenu
+
