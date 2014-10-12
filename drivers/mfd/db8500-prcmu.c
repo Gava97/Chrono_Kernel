@@ -1134,29 +1134,25 @@ static unsigned int last_arm_idx = 0;
 #endif
 
 static struct liveopp_arm_table liveopp_arm[] = {
+//	{25000,     24960, ARM_EXTCLK,  SET_EXT, 0x588, NOCHG,   0x00050168, SET_VOLT, 0x0C, 0x12, 0xDB, 25, 25},
 	{100000,    99840, ARM_EXTCLK,  SET_EXT, 0x582, NOCHG,   0x00050168, SET_VOLT, 0x0C, 0x12, 0xDB, 25, 25},
 	{200000,   199680, ARM_EXTCLK,  SET_EXT, 0x581, NOCHG,   0x00050168, SET_VOLT, 0x0C, 0x12, 0xDB, 25, 25},
-#ifdef CONFIG_LIVEOPP_EXTENDED_FREQ
+//	{250000,   249600, ARM_50_OPP,  NOCHG,   0x741, SET_PLL, 0x00080134, SET_VOLT, 0x0C, 0x12, 0xDB, 25, 25},
 	{300000,   299520, ARM_50_OPP,  NOCHG,   0x741, SET_PLL, 0x0105014E, SET_VOLT, 0x0C, 0x12, 0xDB, 25, 25},
-#endif
+//	{350000,   349866, ARM_50_OPP,  NOCHG,   0x741, SET_PLL, 0x00090152, SET_VOLT, 0x0C, 0x12, 0xDB, 25, 25},
 	{400000,   399360, ARM_50_OPP,  NOCHG,   0x741, SET_PLL, 0x01050168, SET_VOLT, 0x0C, 0x12, 0xDB, 25, 50},
-#ifdef CONFIG_LIVEOPP_EXTENDED_FREQ
 	{500000,   499200, ARM_50_OPP,  NOCHG,   0x741, SET_PLL, 0x01050182, SET_VOLT, 0x0C, 0x1B, 0xDB, 25, 50},
-#endif
 	{600000,   599040, ARM_50_OPP,  NOCHG,   0x741, SET_PLL, 0x0105019C, SET_VOLT, 0x0C, 0x20, 0xDB, 50, 50},
-#ifdef CONFIG_LIVEOPP_EXTENDED_FREQ
 	{700000,   698880, ARM_50_OPP,  NOCHG,   0x741, SET_PLL, 0x010501B6, SET_VOLT, 0x0C, 0x22, 0xDB, 50, 50},
-#endif
 	{800000,   798720, ARM_100_OPP, NOCHG,   0x741, SET_PLL, 0x00050168, SET_VOLT, 0x0B, 0x24, 0xDB, 100, 50},
-#ifdef CONFIG_LIVEOPP_EXTENDED_FREQ
 	{900000,   898560, ARM_100_OPP, NOCHG,   0x741, SET_PLL, 0x00050175, SET_VOLT, 0x0B, 0x29, 0xDB, 100, 100},
-#endif
 	{1000000,  998400, ARM_MAX_OPP, NOCHG,   0x741, SET_PLL, 0x0001011A, SET_VOLT, 0x0B, 0x2F, 0xDB, 100, 100},
 	{1050000, 1049600, ARM_MAX_OPP, NOCHG,   0x741, SET_PLL, 0x00030152, SET_VOLT, 0x0B, 0x34, 0xDB, 100, 100},
 	{1100000, 1100800, ARM_MAX_OPP, NOCHG,   0x741, SET_PLL, 0x00030156, SET_VOLT, 0x0B, 0x36, 0x8F, 100, 100},
 	{1150000, 1152000, ARM_MAX_OPP, NOCHG,   0x741, SET_PLL, 0x0001011E, SET_VOLT, 0x0B, 0x36, 0x8F, 100, 100},
 	{1200000, 1200000, ARM_MAX_OPP, NOCHG,   0x741, SET_PLL, 0x0004017D, SET_VOLT, 0x0B, 0x37, 0x8F, 100, 100},
-	{1250000, 1228800, ARM_MAX_OPP, NOCHG,   0x741, SET_PLL, 0x00020141, SET_VOLT, 0x0B, 0x39, 0x8F, 100, 100},
+	{1250000, 1228800, ARM_MAX_OPP, NOCHG,   0x741, SET_PLL, 0x000501A0, SET_VOLT, 0x0B, 0x37, 0x8F, 100, 100},
+//	{1250000, 1248000, ARM_MAX_OPP, NOCHG,   0x741, SET_PLL, 0x00020141, SET_VOLT, 0x0B, 0x39, 0x8F, 100, 100},
 };
 
 static inline void liveopp_set_armvolt(struct liveopp_arm_table table)
@@ -1495,11 +1491,13 @@ ARM_STEP(arm_step08, 8);
 ARM_STEP(arm_step09, 9);
 ARM_STEP(arm_step10, 10);
 ARM_STEP(arm_step11, 11);
-#ifdef CONFIG_LIVEOPP_EXTENDED_FREQ
 ARM_STEP(arm_step12, 12);
 ARM_STEP(arm_step13, 13);
 ARM_STEP(arm_step14, 14);
-#endif
+//ARM_STEP(arm_step15, 15);
+//ARM_STEP(arm_step16, 16);
+//ARM_STEP(arm_step17, 17);
+//ARM_STEP(arm_step18, 18);
 
 static struct attribute *liveopp_attrs[] = {
 	&version_interface.attr, 
@@ -1518,11 +1516,13 @@ static struct attribute *liveopp_attrs[] = {
 	&arm_step09_interface.attr,
 	&arm_step10_interface.attr, 
 	&arm_step11_interface.attr, 
-#ifdef CONFIG_LIVEOPP_EXTENDED_FREQ
 	&arm_step12_interface.attr, 
 	&arm_step13_interface.attr, 
 	&arm_step14_interface.attr, 
-#endif
+//	&arm_step15_interface.attr, 
+//	&arm_step16_interface.attr, 
+//	&arm_step17_interface.attr, 
+//	&arm_step18_interface.attr, 
 	NULL,
 };
 
