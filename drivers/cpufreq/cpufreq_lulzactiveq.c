@@ -38,6 +38,8 @@
 #include <linux/suspend.h>
 #include <linux/slab.h>
 
+#include <linux/mfd/dbx500-prcmu.h>
+
 //we have only 2 cores
 #define CONFIG_CPU_EXYNOS4210
 
@@ -1970,9 +1972,26 @@ static void lulzactive_early_suspend(struct early_suspend *handler) {
 }
 
 static void lulzactive_late_resume(struct early_suspend *handler) {
+	if (prcmu_qos_add_requirement(PRCMU_QOS_APE_OPP,
+			"hotplug", 100)) {
+		pr_info("pcrm_qos_add APE failed\n");
+	} else pr_err("[lulz] added APE req.");
+	
+	if (prcmu_qos_add_requirement(PRCMU_QOS_DDR_OPP,
+			"hotplug", 100)) {
+		pr_info("pcrm_qos_add DDR failed\n");
+	}
+	else pr_err("[lulz] added DDR req.");
+	
 	struct cpufreq_lulzactive_cpuinfo *dbs_info = &per_cpu(cpuinfo, 0);
 	early_suspended = 0;
 	start_rq_work();
+	
+	prcmu_qos_remove_requirement(PRCMU_QOS_APE_OPP,
+			"hotplug");
+	prcmu_qos_remove_requirement(PRCMU_QOS_DDR_OPP,
+			"hotplug");
+	pr_err("[lulz] removed APE/DDR reqs.");
 }
 
 static struct early_suspend lulzactive_power_suspend = {
@@ -2017,6 +2036,18 @@ void start_lulzactiveq(void)
 	get_task_struct(up_task);
 
 	idle_notifier_register(&cpufreq_lulzactive_idle_nb);
+#if 0
+	if (prcmu_qos_add_requirement(PRCMU_QOS_APE_OPP,
+			"hotplug", 50)) {
+		pr_info("pcrm_qos_add APE failed\n");
+	}
+
+	if (prcmu_qos_add_requirement(PRCMU_QOS_DDR_OPP,
+			"hotplug", 50)) {
+		pr_info("pcrm_qos_add DDR failed\n");
+	}
+#endif
+
 	register_early_suspend(&lulzactive_power_suspend);
 }
 
