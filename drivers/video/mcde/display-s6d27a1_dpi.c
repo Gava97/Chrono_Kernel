@@ -1237,14 +1237,13 @@ static void s6d27a1_dpi_mcde_early_suspend(
 	struct s6d27a1_dpi *lcd = container_of(earlysuspend,
 						struct s6d27a1_dpi,
 						earlysuspend);
-	
-	prcmu_qos_remove_requirement(PRCMU_QOS_APE_OPP,
-				"codina_lcd_dpi");
-	
+
 	pm_message_t dummy;
 
 	s6d27a1_dpi_mcde_suspend(lcd->mdd, dummy);
-
+	
+	prcmu_qos_remove_requirement(PRCMU_QOS_APE_OPP,
+				"codina_lcd_dpi");
 }
 
 static void s6d27a1_dpi_mcde_late_resume(
@@ -1260,7 +1259,6 @@ static void s6d27a1_dpi_mcde_late_resume(
 	}
 
 	s6d27a1_dpi_mcde_resume(lcd->mdd);
-
 }
 #endif
 
