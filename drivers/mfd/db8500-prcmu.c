@@ -1089,7 +1089,6 @@ static void db8500_prcmu_get_abb_event_buffer(void __iomem **buf)
 #include <linux/kobject.h>
 #include <linux/mfd/db8500-liveopp.h>
 
-
 #define LIVEOPP_VER		"2.2"
 
 struct mutex liveopp_lock;
