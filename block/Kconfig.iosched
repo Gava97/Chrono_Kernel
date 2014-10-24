@@ -91,6 +91,13 @@ config IOSCHED_ZEN
 	  FCFS, dispatches are back-inserted, deadlines ensure fairness.
 	  Should work best with devices where there is no travel delay.
 
+config IOSCHED_FIFO
+	tristate "FIFO I/O scheduler"
+	default y
+	---help---
+	Fifo is similar to no-op I/O scheduler and it's a minimal scheduler 
+	that does basic merging and sorting. 
+	  
 config IOSCHED_SIOPLUS
 	tristate "Simple I/O scheduler plus"
 	default y
@@ -184,6 +191,9 @@ choice
 
 	config DEFAULT_NOOP
 		bool "No-op" if IOSCHED_NOOP=y
+	
+	config DEFAULT_FIFO
+		bool "fifo" if IOSCHED_FIFO=y
 
 endchoice
 
@@ -195,6 +205,7 @@ config DEFAULT_IOSCHED
 	default "row" if DEFAULT_ROW
 	default "bfq" if DEFAULT_BFQ
 	default "noop" if DEFAULT_NOOP
+	default "fifo" if DEFAULT_FIFO
 	default "vr" if DEFAULT_VR
 	default "sioplus" if DEFAULT_SIOPLUS
 	default "zen" if DEFAULT_ZEN
