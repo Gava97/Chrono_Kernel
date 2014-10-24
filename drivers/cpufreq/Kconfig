@@ -460,7 +460,7 @@ config CPU_FREQ_GOV_FANTASY
 	  If in doubt, say N.
 
 config CPU_FREQ_LIMITS_ON_SUSPEND
-	bool "CPUfreq limits on suspend"
+	tristate "CPUfreq limits on suspend"
 	depends on CPU_FREQ
 	default y
 		 

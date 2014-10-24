@@ -22,21 +22,28 @@
 #include <linux/kobject.h>
 #include <linux/sysfs.h>
 
-#define VERBOSE_DEBUG 0
+#ifdef MODULE
+#include <linux/kallsyms.h>
+#ifdef CONFIG_TOUCHSCREEN_ZINITIX_BT404
+static bool (*gm_bt404_is_suspend)(void);
+#define bt404_is_suspend (*gm_bt404_is_suspend)
+#endif /* CONFIG_TOUCHSCREEN_ZINITIX_BT404 */
+#else 
+#ifdef CONFIG_TOUCHSCREEN_ZINITIX_BT404
+extern bool bt404_is_suspend(void);
+#endif /* CONFIG_TOUCHSCREEN_ZINITIX_BT404 */
+#endif /* MODULE */
 
-static bool cpu_freq_limits = false;
-static unsigned int screenoff_min_cpufreq = 50000;
-static unsigned int screenoff_max_cpufreq = 300000;
+#define VERBOSE_DEBUG 1
 
-static unsigned int screenon_min_cpufreq = 200000;
+static bool cpu_freq_limits = true;
+static unsigned int screenoff_min_cpufreq = 46000;
+static unsigned int screenoff_max_cpufreq = 330000;
+
+static unsigned int screenon_min_cpufreq = 276000;
 static unsigned int screenon_max_cpufreq = 0;  // screenon_max_cpufreq will use policy->max value
 
 static unsigned int restore_max_cpufreq = 0; // restore max cpufreq, in case if max cpufreq was overriden by prcmu code
-static unsigned int default_max_cpufreq = 1000000; // restore max cpufreq in that worst case if restore_max_cpufreq == 0
-
-#ifdef CONFIG_TOUCHSCREEN_ZINITIX_BT404
-extern bool bt404_is_suspend(void);
-#endif
 
 static int cpufreq_callback(struct notifier_block *nfb,
 		unsigned long event, void *data)
@@ -64,7 +71,7 @@ static int cpufreq_callback(struct notifier_block *nfb,
 		if (new_min > new_max) 
 			new_max = new_min;
 		
-#if VERBOSE_DEBUG > 0		
+#if VERBOSE_DEBUG > 0
 		pr_err("[cpufreq_limits] screenoff_min_cpufreq: %d\n"
 		       "screenoff_max_cpufreq: %d\n"
 		       "screenon_min_cpufreq: %d\n"
@@ -81,13 +88,10 @@ static int cpufreq_callback(struct notifier_block *nfb,
 		 * avoid stuck with min cpu freq
 		 * if 'prcmu qos: update cpufreq frequency limits failed' happens
 		 */
-		if ((new_min == new_max) && (new_min == screenoff_max_cpufreq)) {
+		if ((!is_suspend) && (new_max == screenoff_max_cpufreq)) {
 			if (restore_max_cpufreq) {
 				pr_err("[cpufreq_limits] max_cpufreq=%d KHz was restored after prcmu failure", restore_max_cpufreq);
 				new_max = restore_max_cpufreq;
-			} else { 
-				pr_err("[cpufreq_limits] max_cpufreq=%d KHz was restored after prcmu failure", default_max_cpufreq);
-				new_max = default_max_cpufreq;
 			}
 		}
 		
@@ -177,8 +181,12 @@ static struct kobject *cpufreq_kobject;
 static int cpufreq_limits_driver_init(void)
 {
 	int ret;
-	
 	struct cpufreq_policy *data = cpufreq_cpu_get(0);
+	
+#ifdef MODULE	
+	gm_bt404_is_suspend = (bool (*)(void))kallsyms_lookup_name("bt404_is_suspend");
+#endif
+	
 	if (!screenoff_min_cpufreq)
 		screenoff_min_cpufreq = data->min;
 	if (!screenoff_max_cpufreq)
@@ -202,12 +210,12 @@ static int cpufreq_limits_driver_init(void)
 	
 	return ret;
 }
-late_initcall(cpufreq_limits_driver_init);
 
 static void cpufreq_limits_driver_exit(void)
 {
+	sysfs_remove_group(cpufreq_kobject, &cpufreq_interface_group);
 }
-
+module_init(cpufreq_limits_driver_init);
 module_exit(cpufreq_limits_driver_exit);
 
 MODULE_AUTHOR("Shilin Victor <chrono.monochrome@gmail.com>");
