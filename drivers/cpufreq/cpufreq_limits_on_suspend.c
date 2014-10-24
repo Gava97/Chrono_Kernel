@@ -22,17 +22,17 @@
 #include <linux/kobject.h>
 #include <linux/sysfs.h>
 
-static bool cpu_freq_limits = false;
-static unsigned int min_cpufreq = 50000;
-static unsigned int max_cpufreq = 300000;
+#define VERBOSE_DEBUG 0
 
-/*
- * FixMe:  we have to use separate settings for screen on
- * to avoid wrong override those by rapid changing min/max cpufreq 
- * by ARM_KHZ requirements 
- */
-static unsigned int screenon_min_cpufreq = 300000;
-static unsigned int screenon_max_cpufreq = 1000000;
+static bool cpu_freq_limits = false;
+static unsigned int screenoff_min_cpufreq = 50000;
+static unsigned int screenoff_max_cpufreq = 300000;
+
+static unsigned int screenon_min_cpufreq = 200000;
+static unsigned int screenon_max_cpufreq = 0;  // screenon_max_cpufreq will use policy->max value
+
+static unsigned int restore_max_cpufreq = 0; // restore max cpufreq, in case if max cpufreq was overriden by prcmu code
+static unsigned int default_max_cpufreq = 1000000; // restore max cpufreq in that worst case if restore_max_cpufreq == 0
 
 #ifdef CONFIG_TOUCHSCREEN_ZINITIX_BT404
 extern bool bt404_is_suspend(void);
@@ -50,12 +50,46 @@ static int cpufreq_callback(struct notifier_block *nfb,
 
 		if (event != CPUFREQ_ADJUST)
 			return 0;
-
-		new_min = is_suspend ? min_cpufreq : screenon_min_cpufreq;
-		new_max = is_suspend ? max_cpufreq : screenon_max_cpufreq;
+		
+		if ((!restore_max_cpufreq && !is_suspend) || // e.g. restore_max_cpufreq == 0 and is_suspend == 0 -> restore_max_cpufreq == 800000
+		  ((policy->max > restore_max_cpufreq) && restore_max_cpufreq)) { // restore_max_cpufreq == 800000(!=0) -> policy->max == 1200000 
+			restore_max_cpufreq = policy->max;
+		}
+		
+		screenon_max_cpufreq = policy->max;
+		
+		new_min = is_suspend ? screenoff_min_cpufreq : screenon_min_cpufreq;
+		new_max = is_suspend ? screenoff_max_cpufreq : screenon_max_cpufreq;
 		
 		if (new_min > new_max) 
 			new_max = new_min;
+		
+#if VERBOSE_DEBUG > 0		
+		pr_err("[cpufreq_limits] screenoff_min_cpufreq: %d\n"
+		       "screenoff_max_cpufreq: %d\n"
+		       "screenon_min_cpufreq: %d\n"
+		       "screenon_max_cpufreq: %d\n"
+		       "restore_max_cpufreq: %d\n",
+			screenoff_min_cpufreq,
+			screenoff_max_cpufreq,
+			screenon_min_cpufreq,
+			screenon_max_cpufreq,
+			restore_max_cpufreq
+		      );
+#endif
+		/* 
+		 * avoid stuck with min cpu freq
+		 * if 'prcmu qos: update cpufreq frequency limits failed' happens
+		 */
+		if ((new_min == new_max) && (new_min == screenoff_max_cpufreq)) {
+			if (restore_max_cpufreq) {
+				pr_err("[cpufreq_limits] max_cpufreq=%d KHz was restored after prcmu failure", restore_max_cpufreq);
+				new_max = restore_max_cpufreq;
+			} else { 
+				pr_err("[cpufreq_limits] max_cpufreq=%d KHz was restored after prcmu failure", default_max_cpufreq);
+				new_max = default_max_cpufreq;
+			}
+		}
 		
 		policy->min = new_min;
 		policy->max = new_max;
@@ -76,7 +110,9 @@ static ssize_t cpufreq_limits_show(struct kobject *kobj, struct kobj_attribute *
 		      "min(screen on) = %d KHz\n"
 		      "max(screen on) = %d KHz\n",
 		      cpu_freq_limits ? "on" : "off",
-		      min_cpufreq, max_cpufreq, screenon_min_cpufreq,
+		      screenoff_min_cpufreq, 
+		      screenoff_max_cpufreq, 
+		      screenon_min_cpufreq,
 		      screenon_max_cpufreq
  	      );
 
@@ -107,12 +143,12 @@ static ssize_t cpufreq_limits_store(struct kobject *kobj, struct kobj_attribute 
 	}
 	
 	if (!strncmp(&buf[0], "min=", 4)) {
-		if (!sscanf(&buf[4], "%d", &min_cpufreq))
+		if (!sscanf(&buf[4], "%d", &screenoff_min_cpufreq))
 			goto invalid_input;
 	}
 
 	if (!strncmp(&buf[0], "max=", 4)) {
-		if (!sscanf(&buf[4], "%d", &max_cpufreq))
+		if (!sscanf(&buf[4], "%d", &screenoff_max_cpufreq))
 			goto invalid_input;
 	}
 
@@ -143,13 +179,13 @@ static int cpufreq_limits_driver_init(void)
 	int ret;
 	
 	struct cpufreq_policy *data = cpufreq_cpu_get(0);
-	if (!min_cpufreq)
-		min_cpufreq = data->min;
-	if (!max_cpufreq)
-		max_cpufreq = data->max;
+	if (!screenoff_min_cpufreq)
+		screenoff_min_cpufreq = data->min;
+	if (!screenoff_max_cpufreq)
+		screenoff_max_cpufreq = data->max;
 
 	pr_err("[cpufreq_limits] initialized module with min %d and max %d MHz limits",
-					 min_cpufreq / 1000,  max_cpufreq / 1000
+					 screenoff_min_cpufreq / 1000,  screenoff_max_cpufreq / 1000
 	);
 	
 	cpufreq_kobject = kobject_create_and_add("cpufreq", kernel_kobj);
