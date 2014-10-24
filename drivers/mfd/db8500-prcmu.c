@@ -1101,30 +1101,61 @@ static int liveopp_start = 0;
 
 /**
  * Hard-coded Custom ARM Frequency and Voltage Table
- * 
- * cocafe: 
- * 	References of PLL register bits: dbx500-prcmu-regs.h L#138
- * 
  */
 
 static struct liveopp_arm_table liveopp_arm[] = {
-//	| CLK            | PLL       | VDD | VBB | DDR | APE |
-	{  50000,   46080, 0x00050106, 0x16, 0xDB,  25,  25},
-	{ 100000,   99840, 0x0005010D, 0x17, 0xDB,  25,  25},
-	{ 200000,  199680, 0x0005011A, 0x18, 0xDB,  25,  25},
-	{ 300000,  299520, 0x00050127, 0x19, 0xDB,  25,  25},
-	{ 400000,  399360, 0x00050134, 0x1A, 0xDB,  25,  50},
-	{ 500000,  499200, 0x00050141, 0x1E, 0xDB,  25,  50},
-	{ 600000,  599040, 0x0005014E, 0x20, 0xDB,  50,  50},
-	{ 700000,  698880, 0x0005015B, 0x22, 0xDB,  50,  50},
-	{ 800000,  798720, 0x00050168, 0x24, 0xDB, 100,  50},
-	{ 900000,  898560, 0x00050175, 0x2F, 0xDB, 100, 100},
-	{1000000,  998400, 0x00050182, 0x2F, 0xDB, 100, 100},
-	{1100000, 1098240, 0x0005018F, 0x36, 0x8F, 100, 100},
-	{1150000, 1152000, 0x00050196, 0x36, 0x8F, 100, 100},
-	{1200000, 1198080, 0x0005019C, 0x37, 0x8F, 100, 100},
-	{1230000, 1228800, 0x000501A0, 0x39, 0x8F, 100, 100},
-	{1250000, 1244160, 0x000501A2, 0x39, 0x8F, 100, 100},
+//	| CLK                 | PLL      | VDD  | VBB | DDR | APE |
+	{   46000,      46080, 0x00050106, 0x16,  0xDB,  25,  25},
+	{   69000,      69120, 0x00050109, 0x16,  0xDB,  25,  25},
+	{   92000,      92160, 0x0005010c, 0x17,  0xDB,  25,  25},
+	{  115000,     115200, 0x0005010f, 0x17,  0xDB,  25,  25},
+	{  140000,     138240, 0x00050112, 0x17,  0xDB,  25,  25},
+	{  160000,     161280, 0x00050115, 0x18,  0xDB,  25,  25},
+	{  184000,     184320, 0x00050118, 0x18,  0xDB,  25,  25},
+	{  200000,     199680, 0x0005011a, 0x18,  0xDB,  25,  25},
+	{  230000,     230400, 0x0005011e, 0x18,  0xDB,  25,  25},
+	{  253000,     253440, 0x00050121, 0x18,  0xDB,  25,  25},
+	{  276000,     276480, 0x00050124, 0x19,  0xDB,  25,  25},
+	{  300000,     299520, 0x00050127, 0x19,  0xDB,  25,  25},
+	{  322000,     322560, 0x0005012a, 0x19,  0xDB,  25,  25},
+	{  345000,     345600, 0x0005012d, 0x19,  0xDB,  25,  25},
+	{  369000,     368640, 0x00050130, 0x1A,  0xDB,  25,  25},
+	{  400000,     399360, 0x00050134, 0x1C,  0xDB,  25,  50},
+	{  438000,     437760, 0x00050139, 0x1C,  0xDB,  25,  50},
+	{  460000,     460800, 0x0005013c, 0x1D,  0xDB,  25,  50},
+	{  484000,     483840, 0x0005013f, 0x1E,  0xDB,  25,  50},
+	{  507000,     506880, 0x00050142, 0x1E,  0xDB,  25,  50},
+	{  530000,     529920, 0x00050145, 0x1E,  0xDB,  25,  50},
+	{  553000,     552960, 0x00050148, 0x1F,  0xDB,  25,  50},
+	{  576000,     576000, 0x0005014b, 0x20,  0xDB,  25,  50},
+	{  600000,     599040, 0x0005014e, 0x20,  0xDB,  25,  50},
+	{  622000,     622080, 0x00050151, 0x21,  0xDB,  50,  50},
+	{  645000,     645120, 0x00050154, 0x21,  0xDB,  50,  50},
+	{  668000,     668160, 0x00050157, 0x22,  0xDB,  50,  50},
+	{  691000,     691200, 0x0005015a, 0x22,  0xDB,  50,  50},
+	{  714000,     714240, 0x0005015d, 0x22,  0xDB,  50,  50},
+	{  737000,     737280, 0x00050160, 0x23,  0xDB,  50,  50},
+	{  760000,     760320, 0x00050163, 0x23,  0xDB,  50,  50},
+	{  783000,     783360, 0x00050166, 0x24,  0xDB,  50,  50},
+	{  800000,     798720, 0x00050168, 0x24,  0xDB,  100, 50},
+	{  830000,     829440, 0x0005016c, 0x25,  0xDB,  100, 50},
+	{  852000,     852480, 0x0005016f, 0x27,  0xDB,  100, 50},
+	{  875000,     875520, 0x00050172, 0x28,  0xDB,  100, 100},
+	{  900000,     898560, 0x00050175, 0x29,  0xDB,  100, 100},
+	{  922000,     921600, 0x00050178, 0x2A,  0xDB,  100, 100},
+	{  945000,     944640, 0x0005017b, 0x2B,  0xDB,  100, 100},
+	{  968000,     967680, 0x0005017e, 0x2E,  0xDB,  100, 100},
+	{  1000000,    998400, 0x00050182, 0x2F,  0xDB,  100, 100},
+	{  1037000,   1036800, 0x00050187, 0x30,  0xDB,  100, 100},
+	{  1060000,   1059840, 0x0005018a, 0x31,  0x8F,  100, 100},
+	{  1083000,   1082880, 0x0005018d, 0x32,  0x8F,  100, 100},
+	{  1106000,   1105920, 0x00050190, 0x34,  0x8F,  100, 100},
+	{  1129000,   1128960, 0x00050193, 0x35,  0x8F,  100, 100},
+	{  1150000,   1152000, 0x00050196, 0x36,  0x8F,  100, 100},
+	{  1175000,   1175040, 0x00050199, 0x36,  0x8F,  100, 100},
+	{  1200000,   1198080, 0x0005019c, 0x37,  0x8F,  100, 100},
+	{  1222000,   1221120, 0x0005019f, 0x39,  0x8F,  100, 100},
+	{  1244000,   1244160, 0x000501a2, 0x39,  0x8F,  100, 100},
 };
 
 static const char *armopp_name[] = 
@@ -1398,6 +1429,40 @@ ARM_STEP(arm_step13, 13);
 ARM_STEP(arm_step14, 14);
 ARM_STEP(arm_step15, 15);
 ARM_STEP(arm_step16, 16);
+ARM_STEP(arm_step17, 17);
+ARM_STEP(arm_step18, 18);
+ARM_STEP(arm_step19, 19);
+ARM_STEP(arm_step20, 20);
+ARM_STEP(arm_step21, 21);
+ARM_STEP(arm_step22, 22);
+ARM_STEP(arm_step23, 23);
+ARM_STEP(arm_step24, 24);
+ARM_STEP(arm_step25, 25);
+ARM_STEP(arm_step26, 26);
+ARM_STEP(arm_step27, 27);
+ARM_STEP(arm_step28, 28);
+ARM_STEP(arm_step29, 29);
+ARM_STEP(arm_step30, 30);
+ARM_STEP(arm_step31, 31);
+ARM_STEP(arm_step32, 32);
+ARM_STEP(arm_step33, 33);
+ARM_STEP(arm_step34, 34);
+ARM_STEP(arm_step35, 35);
+ARM_STEP(arm_step36, 36);
+ARM_STEP(arm_step37, 37);
+ARM_STEP(arm_step38, 38);
+ARM_STEP(arm_step39, 39);
+ARM_STEP(arm_step40, 40);
+ARM_STEP(arm_step41, 41);
+ARM_STEP(arm_step42, 42);
+ARM_STEP(arm_step43, 43);
+ARM_STEP(arm_step44, 44);
+ARM_STEP(arm_step45, 45);
+ARM_STEP(arm_step46, 46);
+ARM_STEP(arm_step47, 47);
+ARM_STEP(arm_step48, 48);
+ARM_STEP(arm_step49, 49);
+ARM_STEP(arm_step50, 50);
 
 #if CONFIG_LIVEOPP_DEBUG > 1
 static ssize_t liveopp_start_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)		
@@ -1438,6 +1503,41 @@ static struct attribute *liveopp_attrs[] = {
 	&arm_step14_interface.attr, 
 	&arm_step15_interface.attr, 
 	&arm_step16_interface.attr, 
+        &arm_step17_interface.attr, 
+        &arm_step18_interface.attr, 
+        &arm_step19_interface.attr, 
+        &arm_step20_interface.attr, 
+        &arm_step21_interface.attr, 
+        &arm_step22_interface.attr, 
+        &arm_step23_interface.attr, 
+        &arm_step24_interface.attr, 
+        &arm_step25_interface.attr, 
+        &arm_step26_interface.attr, 
+        &arm_step27_interface.attr, 
+        &arm_step28_interface.attr, 
+        &arm_step29_interface.attr, 
+        &arm_step30_interface.attr, 
+        &arm_step31_interface.attr, 
+        &arm_step32_interface.attr, 
+        &arm_step33_interface.attr, 
+        &arm_step34_interface.attr, 
+        &arm_step35_interface.attr, 
+        &arm_step36_interface.attr, 
+        &arm_step37_interface.attr, 
+
+        &arm_step38_interface.attr, 
+        &arm_step39_interface.attr, 
+        &arm_step40_interface.attr, 
+        &arm_step41_interface.attr, 
+        &arm_step42_interface.attr, 
+        &arm_step43_interface.attr, 
+        &arm_step44_interface.attr, 
+        &arm_step45_interface.attr, 
+        &arm_step46_interface.attr, 
+        &arm_step47_interface.attr, 
+        &arm_step48_interface.attr, 
+        &arm_step49_interface.attr, 
+        &arm_step50_interface.attr,
 	NULL,
 };
 
