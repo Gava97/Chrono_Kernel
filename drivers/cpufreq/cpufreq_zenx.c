@@ -78,14 +78,14 @@ static cpumask_t hotplug_remove_cpumask;
 static spinlock_t hotplug_remove_cpumask_lock;
 
 /* Hi speed to bump to from lo speed when load burst (default max) */
-static unsigned int hispeed_freq;
+static unsigned int hispeed_freq = 714000;
 
 /* Go to hi speed when CPU load at or above this value. */
-#define DEFAULT_GO_HISPEED_LOAD 99
+#define DEFAULT_GO_HISPEED_LOAD 92
 static unsigned long go_hispeed_load = DEFAULT_GO_HISPEED_LOAD;
 
 /* Unplug auxillary CPUs below these values. */
-#define DEFAULT_UNPLUG_LOAD_CPU1 35
+#define DEFAULT_UNPLUG_LOAD_CPU1 20
 #define DEFAULT_UNPLUG_LOAD_CPU2 50
 #define DEFAULT_UNPLUG_LOAD_CPUMORE 70
 
@@ -106,14 +106,14 @@ static int ntarget_loads = ARRAY_SIZE(default_target_loads);
  * Number of sampling periods to take average CPU load across
  * for CPU removal.
  */
-#define DEFAULT_NR_REMOVE_PERIODS (75)
+#define DEFAULT_NR_REMOVE_PERIODS (70)
 static unsigned int hot_remove_sampling_periods = DEFAULT_NR_REMOVE_PERIODS;
 
 /*
  * Number of sampling periods to take average CPU load across
  * for CPU add.
  */
-#define DEFAULT_NR_ADD_PERIODS (60)
+#define DEFAULT_NR_ADD_PERIODS (40)
 static unsigned int hot_add_sampling_periods = DEFAULT_NR_ADD_PERIODS;
 
 /*
