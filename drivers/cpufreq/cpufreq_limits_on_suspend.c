@@ -34,20 +34,19 @@ extern bool bt404_is_suspend(void);
 #endif /* CONFIG_TOUCHSCREEN_ZINITIX_BT404 */
 #endif /* MODULE */
 
-#define VERBOSE_DEBUG 0
-
 static bool cpu_freq_limits = true;
 static unsigned int screenoff_min_cpufreq = 46000;
 static unsigned int screenoff_max_cpufreq = 276000;
 
-static unsigned int screenon_min_cpufreq = 276000;
-static unsigned int screenon_max_cpufreq = 1200000; 
+static unsigned int restore_min_cpufreq = 0;
+static unsigned int restore_max_cpufreq = 0;
 
 static int cpufreq_callback(struct notifier_block *nfb,
 		unsigned long event, void *data)
 {
 	if (cpu_freq_limits) {
 		struct cpufreq_policy *policy = data;
+		int cpu;
 		int new_min = 0, new_max = 0;
 #ifdef CONFIG_TOUCHSCREEN_ZINITIX_BT404
 		bool is_suspend = bt404_is_suspend();
@@ -56,14 +55,49 @@ static int cpufreq_callback(struct notifier_block *nfb,
 		if (event != CPUFREQ_ADJUST)
 			return 0;
 		
-		new_min = is_suspend ? screenoff_min_cpufreq : screenon_min_cpufreq;
-		new_max = is_suspend ? screenoff_max_cpufreq : screenon_max_cpufreq;
+		if ((!restore_max_cpufreq && !is_suspend) || 
+		    ((policy->max > restore_max_cpufreq) && restore_max_cpufreq)) {
+			restore_max_cpufreq = policy->max;
+		}
+		
+		if (!restore_min_cpufreq && !is_suspend) {
+			restore_min_cpufreq = policy->min;
+		}
+		
+		new_min = is_suspend ? screenoff_min_cpufreq : policy->min;
+		new_max = is_suspend ? screenoff_max_cpufreq : policy->max;
 		
 		if (new_min > new_max) 
 			new_max = new_min;
 
-		policy->min = new_min;
-		policy->max = new_max;
+		if ((!is_suspend) &&  (policy->min == screenoff_min_cpufreq 
+			  || new_min == screenoff_min_cpufreq)) {
+			  pr_err("[cpufreq_limits] new min_cpufreq=%d KHz\n", restore_min_cpufreq);
+			  new_min = restore_min_cpufreq;
+		}
+		
+		if ((!is_suspend) &&  (policy->max == screenoff_max_cpufreq 
+			  || new_max == screenoff_max_cpufreq)) {
+			  pr_err("[cpufreq_limits] new max_cpufreq=%d KHz\n", restore_max_cpufreq);
+			  new_max = restore_max_cpufreq;
+		}
+
+		/*
+		 * FIXME: if new_max < policy->min, screenoff limits won't be set
+		 */
+		
+		if (new_max >= policy->min)
+			policy->max = new_max;
+		else {
+			pr_err("new_max=%d < policy->min=%d", new_max, policy->min);
+			policy->max = restore_max_cpufreq;
+		}
+		if (new_min <= policy->max)
+			policy->min = new_min;
+		else {
+			policy->min = restore_min_cpufreq;
+			pr_err("new_min=%d > policy->max=%d", new_min, policy->max);
+		}
 	}
 	return 0;
 }
@@ -76,15 +110,11 @@ static struct notifier_block cpufreq_notifier_block =
 static ssize_t cpufreq_limits_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf) 
 {
 	sprintf(buf, "status: %s\n"
-		      "min(screen off) = %d KHz\n"
-		      "max(screen off) = %d KHz\n"
-		      "min(screen on) = %d KHz\n"
-		      "max(screen on) = %d KHz\n",
+		      "min = %d KHz\n"
+		      "max = %d KHz\n",
 		      cpu_freq_limits ? "on" : "off",
 		      screenoff_min_cpufreq, 
-		      screenoff_max_cpufreq, 
-		      screenon_min_cpufreq,
-		      screenon_max_cpufreq
+		      screenoff_max_cpufreq
  	      );
 
 	return strlen(buf);
@@ -92,16 +122,6 @@ static ssize_t cpufreq_limits_show(struct kobject *kobj, struct kobj_attribute *
 
 static ssize_t cpufreq_limits_store(struct kobject *kobj, struct kobj_attribute *attr, const char *buf, size_t count)
 {
-  	
-	if (!strncmp(&buf[0], "screenon_min=", 13)) {
-		if (!sscanf(&buf[13], "%d", &screenon_min_cpufreq))
-			goto invalid_input;
-	}
-
-	if (!strncmp(&buf[0], "screenon_max=", 13)) {
-		if (!sscanf(&buf[13], "%d", &screenon_max_cpufreq))
-			goto invalid_input;
-	}
   
 	if (!strncmp(buf, "on", 2)) {
 		cpu_freq_limits = true;
@@ -180,7 +200,9 @@ static int cpufreq_limits_driver_init(void)
 
 static void cpufreq_limits_driver_exit(void)
 {
+	cpufreq_unregister_notifier(&cpufreq_notifier_block, CPUFREQ_POLICY_NOTIFIER);
 	sysfs_remove_group(cpufreq_kobject, &cpufreq_interface_group);
+	kfree(cpufreq_kobject);
 }
 module_init(cpufreq_limits_driver_init);
 module_exit(cpufreq_limits_driver_exit);
