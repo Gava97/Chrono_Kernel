@@ -34,16 +34,14 @@ extern bool bt404_is_suspend(void);
 #endif /* CONFIG_TOUCHSCREEN_ZINITIX_BT404 */
 #endif /* MODULE */
 
-#define VERBOSE_DEBUG 1
+#define VERBOSE_DEBUG 0
 
 static bool cpu_freq_limits = true;
 static unsigned int screenoff_min_cpufreq = 46000;
-static unsigned int screenoff_max_cpufreq = 330000;
+static unsigned int screenoff_max_cpufreq = 276000;
 
 static unsigned int screenon_min_cpufreq = 276000;
-static unsigned int screenon_max_cpufreq = 0;  // screenon_max_cpufreq will use policy->max value
-
-static unsigned int restore_max_cpufreq = 0; // restore max cpufreq, in case if max cpufreq was overriden by prcmu code
+static unsigned int screenon_max_cpufreq = 1200000; 
 
 static int cpufreq_callback(struct notifier_block *nfb,
 		unsigned long event, void *data)
@@ -58,43 +56,12 @@ static int cpufreq_callback(struct notifier_block *nfb,
 		if (event != CPUFREQ_ADJUST)
 			return 0;
 		
-		if ((!restore_max_cpufreq && !is_suspend) || // e.g. restore_max_cpufreq == 0 and is_suspend == 0 -> restore_max_cpufreq == 800000
-		  ((policy->max > restore_max_cpufreq) && restore_max_cpufreq)) { // restore_max_cpufreq == 800000(!=0) -> policy->max == 1200000 
-			restore_max_cpufreq = policy->max;
-		}
-		
-		screenon_max_cpufreq = policy->max;
-		
 		new_min = is_suspend ? screenoff_min_cpufreq : screenon_min_cpufreq;
 		new_max = is_suspend ? screenoff_max_cpufreq : screenon_max_cpufreq;
 		
 		if (new_min > new_max) 
 			new_max = new_min;
-		
-#if VERBOSE_DEBUG > 0
-		pr_err("[cpufreq_limits] screenoff_min_cpufreq: %d\n"
-		       "screenoff_max_cpufreq: %d\n"
-		       "screenon_min_cpufreq: %d\n"
-		       "screenon_max_cpufreq: %d\n"
-		       "restore_max_cpufreq: %d\n",
-			screenoff_min_cpufreq,
-			screenoff_max_cpufreq,
-			screenon_min_cpufreq,
-			screenon_max_cpufreq,
-			restore_max_cpufreq
-		      );
-#endif
-		/* 
-		 * avoid stuck with min cpu freq
-		 * if 'prcmu qos: update cpufreq frequency limits failed' happens
-		 */
-		if ((!is_suspend) && (new_max == screenoff_max_cpufreq)) {
-			if (restore_max_cpufreq) {
-				pr_err("[cpufreq_limits] max_cpufreq=%d KHz was restored after prcmu failure", restore_max_cpufreq);
-				new_max = restore_max_cpufreq;
-			}
-		}
-		
+
 		policy->min = new_min;
 		policy->max = new_max;
 	}
