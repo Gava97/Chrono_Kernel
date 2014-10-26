@@ -5,27 +5,6 @@
 # VERSION&DATE	: Version 1.00	2009/02
 ##############################################################################
 
-MOD_NAME = j4fs
 
-ifneq ($(KERNELRELEASE), )
+obj-$(CONFIG_J4FS) := j4fs_kernel.o llid_kernel.o fsd_common.o
 
-EXTRA_CFLAGS +=  -I$(PRJROOT)/modules/include -I$(KDIR)/drivers/tfsr/Inc -I$(KDIR)/include -I$(KDIR)/include/linux -I$(KDIR)/include/asm -D__KERNEL
-
-obj-m := $(MOD_NAME).o
-
-$(MOD_NAME)-y := j4fs_kernel.o llid_kernel.o fsd_common.o
-
-else
-
-all:
-	@$(MAKE) -C $(KDIR) \
-		SUBDIRS=$(CURDIR) modules
-
-clean:
-	rm -f *.o *.ko *.mod.c *~ .*.cmd
-
-install:
-	@$(MAKE) --no-print-directory -C $(KDIR) \
-		SUBDIRS=$(CURDIR) modules_install
-
-endif
