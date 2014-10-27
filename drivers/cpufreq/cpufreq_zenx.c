@@ -78,16 +78,16 @@ static cpumask_t hotplug_remove_cpumask;
 static spinlock_t hotplug_remove_cpumask_lock;
 
 /* Hi speed to bump to from lo speed when load burst (default max) */
-static unsigned int hispeed_freq = 714000;
+static unsigned int hispeed_freq = 530000;
 
 /* Go to hi speed when CPU load at or above this value. */
-#define DEFAULT_GO_HISPEED_LOAD 92
+#define DEFAULT_GO_HISPEED_LOAD 90
 static unsigned long go_hispeed_load = DEFAULT_GO_HISPEED_LOAD;
 
 /* Unplug auxillary CPUs below these values. */
-#define DEFAULT_UNPLUG_LOAD_CPU1 20
-#define DEFAULT_UNPLUG_LOAD_CPU2 50
-#define DEFAULT_UNPLUG_LOAD_CPUMORE 70
+#define DEFAULT_UNPLUG_LOAD_CPU1 0
+#define DEFAULT_UNPLUG_LOAD_CPU2 0
+#define DEFAULT_UNPLUG_LOAD_CPUMORE 0
 
 static unsigned int unplug_load[] =
 	{ DEFAULT_UNPLUG_LOAD_CPU1,
@@ -96,7 +96,7 @@ static unsigned int unplug_load[] =
 	};
 
 /* Target load.  Lower values result in higher CPU speeds. */
-#define DEFAULT_TARGET_LOAD 90
+#define DEFAULT_TARGET_LOAD 85
 static unsigned int default_target_loads[] = {DEFAULT_TARGET_LOAD};
 static spinlock_t target_loads_lock;
 static unsigned int *target_loads = default_target_loads;
