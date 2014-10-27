@@ -35,8 +35,8 @@ extern bool bt404_is_suspend(void);
 #endif /* MODULE */
 
 static bool cpu_freq_limits = true;
-static unsigned int screenoff_min_cpufreq = 46000;
-static unsigned int screenoff_max_cpufreq = 276000;
+static unsigned int screenoff_min_cpufreq = 115000;
+static unsigned int screenoff_max_cpufreq = 400000;
 
 static unsigned int restore_min_cpufreq = 0;
 static unsigned int restore_max_cpufreq = 0;
