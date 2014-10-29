@@ -1111,17 +1111,25 @@ static struct liveopp_arm_table liveopp_arm[] = {
 //	| CLK            | PLL       | VDD | VBB | DDR | APE |
 	{  50000,   46080, 0x00050106, 0x18, 0xDB,  25,  25},
 	{ 100000,   99840, 0x0005010D, 0x18, 0xDB,  25,  25},
+	{ 184000,  184320, 0x00050118, 0x18, 0xDB,  25,  25},
 	{ 200000,  199680, 0x0005011A, 0x18, 0xDB,  25,  25},
+	{ 250000,  253440, 0x00050121, 0x18, 0xDB,  25,  25},
+	{ 275000,  276480, 0x00050124, 0x18, 0xDB,  25,  25},
 	{ 300000,  299520, 0x00050127, 0x18, 0xDB,  25,  25},
 	{ 400000,  399360, 0x00050134, 0x1A, 0xDB,  25,  50},
 	{ 500000,  499200, 0x00050141, 0x1E, 0xDB,  25,  50},
+	{ 530000,  529920, 0x00050145, 0x20, 0xDB,  25,  50},
+	{ 550000,  552960, 0x00050148, 0x20, 0xDB,  25,  50},
+	{ 575000,  576000, 0x0005014b, 0x20, 0xDB,  50,  50},
 	{ 600000,  599040, 0x0005014E, 0x20, 0xDB,  50,  50},
 	{ 700000,  698880, 0x0005015B, 0x24, 0xDB,  50,  50},
 	{ 800000,  798720, 0x00050168, 0x24, 0xDB, 100,  50},
 	{ 900000,  898560, 0x00050175, 0x2F, 0xDB, 100,  50},
 	{1000000,  998400, 0x00050182, 0x2F, 0xDB, 100, 100},
 	{1100000, 1098240, 0x0005018F, 0x36, 0x8F, 100, 100},
+	{1128000, 1128960, 0x00050193, 0x36, 0x8F, 100, 100},
 	{1150000, 1152000, 0x00050196, 0x36, 0x8F, 100, 100},
+	{1175000, 1175040, 0x00050199, 0x36, 0x8F, 100, 100},
 	{1200000, 1198080, 0x0005019C, 0x37, 0x8F, 100, 100},
 	{1230000, 1228800, 0x000501A0, 0x39, 0x8F, 100, 100},
 	{1250000, 1244160, 0x000501A2, 0x39, 0x8F, 100, 100},
@@ -1398,6 +1406,13 @@ ARM_STEP(arm_step13, 13);
 ARM_STEP(arm_step14, 14);
 ARM_STEP(arm_step15, 15);
 ARM_STEP(arm_step16, 16);
+ARM_STEP(arm_step17, 10);
+ARM_STEP(arm_step18, 11);
+ARM_STEP(arm_step19, 19);
+ARM_STEP(arm_step20, 20);
+ARM_STEP(arm_step21, 21);
+ARM_STEP(arm_step22, 22);
+ARM_STEP(arm_step23, 23);
 
 #if CONFIG_LIVEOPP_DEBUG > 1
 static ssize_t liveopp_start_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)		
@@ -1438,6 +1453,13 @@ static struct attribute *liveopp_attrs[] = {
 	&arm_step14_interface.attr, 
 	&arm_step15_interface.attr, 
 	&arm_step16_interface.attr, 
+	&arm_step17_interface.attr, 
+	&arm_step18_interface.attr, 
+	&arm_step19_interface.attr, 
+	&arm_step20_interface.attr, 
+	&arm_step21_interface.attr, 
+	&arm_step22_interface.attr, 
+	&arm_step23_interface.attr, 
 	NULL,
 };
 
