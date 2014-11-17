@@ -2879,44 +2879,44 @@ cfq_alloc_io_context(struct cfq_data *cfqd, gfp_t gfp_mask)
 
 static void cfq_init_prio_data(struct cfq_queue *cfqq, struct io_context *ioc)
 {
-        struct task_struct *tsk = current;
-        int ioprio_class;
+	struct task_struct *tsk = current;
+	int ioprio_class;
 
-        if (!cfq_cfqq_prio_changed(cfqq))
-                return;
+	if (!cfq_cfqq_prio_changed(cfqq))
+		return;
 
-        ioprio_class = IOPRIO_PRIO_CLASS(ioc->ioprio);
-        switch (ioprio_class) {
-        default:
-                printk(KERN_ERR "cfq: bad prio %x\n", ioprio_class);
-        case IOPRIO_CLASS_NONE:
-                /*
-                 * no prio set, inherit CPU scheduling settings
-                 */
-                cfqq->ioprio = task_nice_ioprio(tsk);
-                cfqq->ioprio_class = task_nice_ioclass(tsk);
-                break;
-        case IOPRIO_CLASS_RT:
-                cfqq->ioprio = task_ioprio(ioc);
-                cfqq->ioprio_class = IOPRIO_CLASS_RT;
-                break;
-        case IOPRIO_CLASS_BE:
-                cfqq->ioprio = task_ioprio(ioc);
-                cfqq->ioprio_class = IOPRIO_CLASS_BE;
-                break;
-        case IOPRIO_CLASS_IDLE:
-                cfqq->ioprio_class = IOPRIO_CLASS_IDLE;
-                cfqq->ioprio = 7;
-                cfq_clear_cfqq_idle_window(cfqq);
-                break;
-        }
+	ioprio_class = IOPRIO_PRIO_CLASS(ioc->ioprio);
+	switch (ioprio_class) {
+	default:
+		printk(KERN_ERR "cfq: bad prio %x\n", ioprio_class);
+	case IOPRIO_CLASS_NONE:
+		/*
+		 * no prio set, inherit CPU scheduling settings
+		 */
+		cfqq->ioprio = task_nice_ioprio(tsk);
+		cfqq->ioprio_class = task_nice_ioclass(tsk);
+		break;
+	case IOPRIO_CLASS_RT:
+		cfqq->ioprio = task_ioprio(ioc);
+		cfqq->ioprio_class = IOPRIO_CLASS_RT;
+		break;
+	case IOPRIO_CLASS_BE:
+		cfqq->ioprio = task_ioprio(ioc);
+		cfqq->ioprio_class = IOPRIO_CLASS_BE;
+		break;
+	case IOPRIO_CLASS_IDLE:
+		cfqq->ioprio_class = IOPRIO_CLASS_IDLE;
+		cfqq->ioprio = 7;
+		cfq_clear_cfqq_idle_window(cfqq);
+		break;
+	}
 
-        /*
-         * keep track of original prio settings in case we have to temporarily
-         * elevate the priority of this queue
-         */
-        cfqq->org_ioprio = cfqq->ioprio;
-        cfq_clear_cfqq_prio_changed(cfqq);
+	/*
+	 * keep track of original prio settings in case we have to temporarily
+	 * elevate the priority of this queue
+	 */
+	cfqq->org_ioprio = cfqq->ioprio;
+	cfq_clear_cfqq_prio_changed(cfqq);
 }
 
 static void changed_ioprio(struct io_context *ioc, struct cfq_io_context *cic)
@@ -3636,54 +3636,6 @@ static void cfq_completed_request(struct request_queue *q, struct request *rq)
                 if (!time_after(rq->start_time + cfqd->cfq_fifo_expire[1], now))
                         cfqd->last_delayed_sync = now;
         }
-
-#ifdef CONFIG_CFQ_GROUP_IOSCHED
-        cfqq->cfqg->ttime.last_end_request = now;
-#endif
-
-        /*
-         * If this is the active queue, check if it needs to be expired,
-         * or if we want to idle in case it has no pending requests.
-         */
-        if (cfqd->active_queue == cfqq) {
-                const bool cfqq_empty = RB_EMPTY_ROOT(&cfqq->sort_list);
-
-                if (cfq_cfqq_slice_new(cfqq)) {
-                        cfq_set_prio_slice(cfqd, cfqq);
-                        cfq_clear_cfqq_slice_new(cfqq);
-                }
-
-                /*
-                 * Should we wait for next request to come in before we expire
-                 * the queue.
-                 */
-                if (cfq_should_wait_busy(cfqd, cfqq)) {
-                        unsigned long extend_sl = cfqd->cfq_slice_idle;
-                        if (!cfqd->cfq_slice_idle)
-                                extend_sl = cfqd->cfq_group_idle;
-                        cfqq->slice_end = jiffies + extend_sl;
-                        cfq_mark_cfqq_wait_busy(cfqq);
-                        cfq_log_cfqq(cfqd, cfqq, "will busy wait");
-                }
-
-                /*
-                 * Idling is not enabled on:
-                 * - expired queues
-                 * - idle-priority queues
-                 * - async queues
-                 * - queues with still some requests queued
-                 * - when there is a close cooperator
-                 */
-                if (cfq_slice_used(cfqq) || cfq_class_idle(cfqq))
-                        cfq_slice_expired(cfqd, 1);
-                else if (sync && cfqq_empty &&
-                         !cfq_close_cooperator(cfqd, cfqq)) {
-                        cfq_arm_slice_timer(cfqd);
-                }
-        }
-
-        if (!cfqd->rq_in_driver)
-                cfq_schedule_dispatch(cfqd);
 }
 
 static inline int __cfq_may_queue(struct cfq_queue *cfqq)
@@ -3698,27 +3650,27 @@ static inline int __cfq_may_queue(struct cfq_queue *cfqq)
 
 static int cfq_may_queue(struct request_queue *q, int rw)
 {
-        struct cfq_data *cfqd = q->elevator->elevator_data;
-        struct task_struct *tsk = current;
-        struct cfq_io_context *cic;
-        struct cfq_queue *cfqq;
+	struct cfq_data *cfqd = q->elevator->elevator_data;
+	struct task_struct *tsk = current;
+	struct cfq_io_context *cic;
+	struct cfq_queue *cfqq;
 
-        /*
-         * don't force setup of a queue from here, as a call to may_queue
-         * does not necessarily imply that a request actually will be queued.
-         * so just lookup a possibly existing queue, or return 'may queue'
-         * if that fails
-         */
-        cic = cfq_cic_lookup(cfqd, tsk->io_context);
-        if (!cic)
-                return ELV_MQUEUE_MAY;
+	/*
+	 * don't force setup of a queue from here, as a call to may_queue
+	 * does not necessarily imply that a request actually will be queued.
+	 * so just lookup a possibly existing queue, or return 'may queue'
+	 * if that fails
+	 */
+	cic = cfq_cic_lookup(cfqd, tsk->io_context);
+	if (!cic)
+		return ELV_MQUEUE_MAY;
 
-        cfqq = cic_to_cfqq(cic, rw_is_sync(rw));
-        if (cfqq) {
-                cfq_init_prio_data(cfqq, cic->ioc);
+	cfqq = cic_to_cfqq(cic, rw_is_sync(rw));
+	if (cfqq) {
+		cfq_init_prio_data(cfqq, cic->ioc);
 
-                return __cfq_may_queue(cfqq);
-        }
+		return __cfq_may_queue(cfqq);
+	}
 
         return ELV_MQUEUE_MAY;
 }
