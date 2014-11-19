@@ -72,6 +72,8 @@
 #include <linux/compiler.h>
 #include <linux/irqflags.h>
 #include <linux/rcupdate.h>
+#include <trace/events/rcu.h>
+#include "rcu.h"
 
 #include <asm/system.h>
 
