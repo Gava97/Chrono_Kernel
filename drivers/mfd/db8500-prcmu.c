@@ -1101,7 +1101,21 @@ static void db8500_prcmu_get_abb_event_buffer(void __iomem **buf)
 #define LIVEOPP_VER		"2.2"
 
 #define PRCMU_ARMFIX_REG		0x0000
+#define PRCMU_ACLK_REG			0x0004
+#define PRCMU_SVACLK_REG		0x0008
+#define PRCMU_SIACLK_REG		0x000c
 #define PRCMU_SGACLK_REG		0x0014
+#define PRCMU_PER1CLK_REG		0x002c
+#define PRCMU_PER2CLK_REG		0x0030
+#define PRCMU_PER3CLK_REG		0x0034
+#define PRCMU_PER5CLK_REG		0x0038
+#define PRCMU_PER6CLK_REG		0x003c
+#define PRCMU_BMLCLK_REG		0x004c
+#define PRCMU_APEATCLK_REG		0x005c
+#define PRCMU_APETRACECLK_REG		0x0060
+#define PRCMU_MCDECLK_REG		0x0064
+#define PRCMU_DMACLK_REG		0x0074
+#define PRCMU_B2R2CLK_REG		0x0078
 #define PRCMU_PLLSOC0_REG		0x0080
 #define PRCMU_PLLSOC1_REG		0x0084
 #define PRCMU_PLLARM_REG		0x0088
@@ -1138,8 +1152,8 @@ struct liveopp_arm_table
 	u32 	pllarm_raw;
 	u8 	varm_raw;
 	u8  	vbbx_raw;
-	s8	ddr_opp;
-	s8	ape_opp;
+	int	ddr_opp;
+	int	ape_opp;
 };
 
 /* 
@@ -1229,14 +1243,14 @@ static struct liveopp_arm_table liveopp_arm[] = {
 	{ 575000,  576000, 0x0005014b, 0x22, 0xDB,  50, 100},
 	{ 600000,  599040, 0x0005014E, 0x23, 0xDB,  50, 100},
 	{ 700000,  698880, 0x0005015B, 0x24, 0xDB,  50, 100},
-	{ 800000,  798720, 0x00050168, 0x24, 0xDB, 100, 100},
+	{ 800000,  798720, 0x00050168, 0x24, 0xDB,  50, 100},
 	{ 900000,  898560, 0x00050175, 0x30, 0xDB, 100, 100},
 	{1000000,  998400, 0x00050182, 0x31, 0x8F, 100, 100},
 	{1100000, 1098240, 0x0005018F, 0x36, 0x8F, 100, 100},
 	{1150000, 1152000, 0x00050196, 0x36, 0x8F, 100, 100},
-	{1200000, 1198080, 0x0005019C, 0x37, 0x8F, 100, 100},
-	{1230000, 1228800, 0x000501A0, 0x38, 0x8F, 100, 100},
-	{1245000, 1244160, 0x000501A2, 0x38, 0x8F, 100, 100},
+	{1200000, 1198080, 0x0005019C, 0x37, 0x8F, 125, 100},
+	{1230000, 1228800, 0x000501A0, 0x38, 0x8F, 125, 100},
+	{1245000, 1244160, 0x000501A2, 0x38, 0x8F, 125, 100},
 };
 #endif
 
@@ -1396,15 +1410,84 @@ static int pllarm_freq(u32 raw)
 	return pll;
 }
 
+static void update_register_value(int new_val, int reg, int delay)
+{
+	u32 val;
+	int old_val = readl(prcmu_base + reg);
+	
+	if (!old_val) return;
+	
+	for (val = old_val;
+	     (new_val > old_val) ? (val <= new_val) : (val >= new_val); 
+	     (new_val > old_val) ? val++ : val--) {
+			writel_relaxed(val, prcmu_base + reg);
+			udelay(delay);
+	}
+	
+}
+
+static bool ddr_boost_prev_state = false;
+
+static void ddr_cross_clocks_boost(bool state)
+{
+	if (state == ddr_boost_prev_state) return;
+	
+	if (state) {
+			//TODO: make PRCMU_REGS tweakable
+			
+			//update_register_value(0x184, PRCMU_ACLK_REG, 10);      // OPP100: 0x184
+			//update_register_value(0x002, PRCMU_SVACLK_REG, 10);    // OPP100: 0x002
+			//update_register_value(0x002, PRCMU_SIACLK_REG, 10);    // OPP100: 0x002
+			update_register_value(0x185, PRCMU_PER1CLK_REG, 10);     // OPP100: 0x186 
+			update_register_value(0x185, PRCMU_PER2CLK_REG, 10);     // 
+			update_register_value(0x185, PRCMU_PER3CLK_REG, 10);     // 
+			update_register_value(0x185, PRCMU_PER5CLK_REG, 10);     // 
+			update_register_value(0x185, PRCMU_PER6CLK_REG, 10);     // 
+			update_register_value(0x003, PRCMU_BMLCLK_REG, 10);      // OPP100: 0x004
+			update_register_value(0x183, PRCMU_APEATCLK_REG, 10);    // OPP100: 0x184
+			update_register_value(0x184, PRCMU_APETRACECLK_REG, 10); // OPP100: 0x185
+			//update_register_value(0x184, PRCMU_MCDECLK_REG, 10);   // OPP100: 0x185
+			update_register_value(0x183, PRCMU_DMACLK_REG, 10);      // OPP100: 0x184
+			//update_register_value(0x003, PRCMU_B2R2CLK_REG, 10);   // OPP100: 0x004
+			//pr_err("[LiveOPP] boost ddr clocks\n");
+	} else	{
+			//update_register_value(0x184, PRCMU_ACLK_REG, 10);
+			//update_register_value(0x002, PRCMU_SVACLK_REG, 10);
+			//update_register_value(0x002, PRCMU_SIACLK_REG, 10);
+			update_register_value(0x186, PRCMU_PER1CLK_REG, 10);
+			update_register_value(0x186, PRCMU_PER2CLK_REG, 10);
+			update_register_value(0x186, PRCMU_PER3CLK_REG, 10);
+			update_register_value(0x186, PRCMU_PER5CLK_REG, 10);
+			update_register_value(0x186, PRCMU_PER6CLK_REG, 10);
+			update_register_value(0x004, PRCMU_BMLCLK_REG, 10);
+			update_register_value(0x184, PRCMU_APEATCLK_REG, 10);
+			update_register_value(0x185, PRCMU_APETRACECLK_REG, 10);
+			//update_register_value(0x185, PRCMU_MCDECLK_REG, 10);
+			update_register_value(0x184, PRCMU_DMACLK_REG, 10);
+			//update_register_value(0x004, PRCMU_B2R2CLK_REG, 10);
+			//pr_err("[LiveOPP] unboost ddr clocks\n");
+	}
+	
+	ddr_boost_prev_state = state;
+}
+
 static struct liveopp_arm_table curr_table;
 
 static void requirements_update_thread(struct work_struct *requirements_update_work)
 {
-	prcmu_qos_update_requirement(PRCMU_QOS_DDR_OPP,
-					"cpufreq",
+		
+	if (curr_table.ddr_opp > 100) {
+		prcmu_qos_update_requirement(PRCMU_QOS_DDR_OPP, "cpufreq",
+					(signed char)100);
+		ddr_cross_clocks_boost(true);
+		
+	} else {
+		ddr_cross_clocks_boost(false);
+		prcmu_qos_update_requirement(PRCMU_QOS_DDR_OPP, "cpufreq",
 					(signed char)curr_table.ddr_opp);
-	prcmu_qos_update_requirement(PRCMU_QOS_APE_OPP,
-					"cpufreq",
+	}	
+	
+	prcmu_qos_update_requirement(PRCMU_QOS_APE_OPP, "cpufreq",
 					(signed char)curr_table.ape_opp);
 }
 static DECLARE_WORK(requirements_update_work, requirements_update_thread);
@@ -1607,8 +1690,8 @@ static ssize_t arm_step_show(struct kobject *kobj, struct kobj_attribute *attr, 
 	sprintf(buf, "%sVarm:\t\t\t%d uV (%#04x)\n", buf, varm_uv(liveopp_arm[_index].varm_raw),
 								     (int)liveopp_arm[_index].varm_raw);
 	sprintf(buf, "%sVbbx:\t\t\t%#04x\n", buf, (int)liveopp_arm[_index].vbbx_raw);
-	sprintf(buf, "%sDDR_OPP:\t\t\t%d\n", buf, (int)((signed char)liveopp_arm[_index].ddr_opp));
-	sprintf(buf, "%sAPE_OPP:\t\t\t%d\n", buf, (int)((signed char)liveopp_arm[_index].ape_opp));
+	sprintf(buf, "%sDDR_OPP:\t\t\t%d\n", buf, liveopp_arm[_index].ddr_opp);
+	sprintf(buf, "%sAPE_OPP:\t\t\t%d\n", buf, liveopp_arm[_index].ape_opp);
 
 	return sprintf(buf, "%s\n", buf);
 }
@@ -1681,8 +1764,9 @@ static ssize_t arm_step_store(struct kobject *kobj, struct kobj_attribute *attr,
 
 	if (!strncmp(buf, "ddropp=", 7)) {
 		ret = sscanf(&buf[7], "%d", &val);
-		if ((!ret) || (val != 25 && val != 50 && val != 100 && val != -1 && val != -2)) {
-			pr_err("[LiveOPP] Invalid QOS_DDR_OPP value. Enter 25, 50 or 100\n");
+		if ((!ret) || (val != 12 && val != 25 && val != 50 && val != 100 && val != 125 && val != -1 && val != -2)) {
+			pr_err("[LiveOPP] Invalid QOS_DDR_OPP value."
+			"Enter 12, 25, 50, 100 or 125\n");
 			return -EINVAL;
 		}
 
@@ -1793,6 +1877,88 @@ static ssize_t pllddr_store(struct kobject *kobj, struct kobj_attribute *attr, c
 }
 ATTR_RW(pllddr);
 
+static int pllddr_cross_clk_freq(int pllddr_freq, u32 reg_raw)
+{
+	int reg_freq, reg_div;
+	
+	reg_div = reg_raw & 0xf;
+	reg_freq = (pllddr_freq - (pllddr_freq % reg_div)) / reg_div;
+	
+	return reg_freq;
+}
+
+static ssize_t pllddr_cross_clocks_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
+{
+	u32 pllddr_raw, reg_raw;
+	int pllddr_freq;
+	
+	pllddr_raw = readl(prcmu_base + PRCMU_PLLDDR_REG);
+	pllddr_freq = pllarm_freq(pllddr_raw);
+	
+	sprintf(buf, "DDR_OPP: %d\n", curr_table.ddr_opp);
+	sprintf(buf, "PLLDDR: %d\n\n", pllddr_freq);
+
+	reg_raw = readl(prcmu_base + PRCMU_ACLK_REG);
+	
+	sprintf(buf, "%sACLK: %#010x (%d kHz)\n", buf, reg_raw,
+		pllddr_cross_clk_freq(pllddr_freq, reg_raw));
+	
+	reg_raw = readl(prcmu_base + PRCMU_SVACLK_REG);
+	sprintf(buf, "%sSVACLK: %#010x (%d kHz)\n", buf, reg_raw,
+		pllddr_cross_clk_freq(pllddr_freq, reg_raw));
+	
+	reg_raw = readl(prcmu_base + PRCMU_SIACLK_REG);
+	sprintf(buf, "%sSIACLK: %#010x (%d kHz)\n", buf, reg_raw,
+		pllddr_cross_clk_freq(pllddr_freq, reg_raw));
+		
+	reg_raw = readl(prcmu_base + PRCMU_PER1CLK_REG);
+	sprintf(buf, "%sPER1CLK: %#010x (%d kHz)\n", buf, reg_raw,
+		pllddr_cross_clk_freq(pllddr_freq, reg_raw));
+	
+	reg_raw = readl(prcmu_base + PRCMU_PER2CLK_REG);
+	sprintf(buf, "%sPER2CLK: %#010x (%d kHz)\n", buf, reg_raw,
+		pllddr_cross_clk_freq(pllddr_freq, reg_raw));
+	
+	reg_raw = readl(prcmu_base + PRCMU_PER3CLK_REG);
+	sprintf(buf, "%sPER3CLK: %#010x (%d kHz)\n", buf, reg_raw,
+		pllddr_cross_clk_freq(pllddr_freq, reg_raw));
+	
+	reg_raw = readl(prcmu_base + PRCMU_PER5CLK_REG);
+	sprintf(buf, "%sPER5CLK: %#010x (%d kHz)\n", buf, reg_raw,
+		pllddr_cross_clk_freq(pllddr_freq, reg_raw));
+	
+	reg_raw = readl(prcmu_base + PRCMU_PER6CLK_REG);
+	sprintf(buf, "%sPER6CLK: %#010x (%d kHz)\n", buf, reg_raw,
+		pllddr_cross_clk_freq(pllddr_freq, reg_raw));
+	
+	reg_raw = readl(prcmu_base + PRCMU_BMLCLK_REG);
+	sprintf(buf, "%sBMLCLK: %#010x (%d kHz)\n", buf, reg_raw,
+		pllddr_cross_clk_freq(pllddr_freq, reg_raw));
+	
+	reg_raw = readl(prcmu_base + PRCMU_APEATCLK_REG);
+	sprintf(buf, "%sAPEATCLK: %#010x (%d kHz)\n", buf, reg_raw,
+		pllddr_cross_clk_freq(pllddr_freq, reg_raw));
+	
+	reg_raw = readl(prcmu_base + PRCMU_APETRACECLK_REG);
+	sprintf(buf, "%sAPETRACECLK: %#010x (%d kHz)\n", buf, reg_raw,
+		pllddr_cross_clk_freq(pllddr_freq, reg_raw));
+	
+	reg_raw = readl(prcmu_base + PRCMU_MCDECLK_REG);
+	sprintf(buf, "%sMCDECLK: %#010x (%d kHz)\n", buf, reg_raw,
+		pllddr_cross_clk_freq(pllddr_freq, reg_raw));
+	
+	reg_raw = readl(prcmu_base + PRCMU_DMACLK_REG);
+	sprintf(buf, "%sDMACLK: %#010x (%d kHz)\n", buf, reg_raw,
+		pllddr_cross_clk_freq(pllddr_freq, reg_raw));
+	
+	reg_raw = readl(prcmu_base + PRCMU_B2R2CLK_REG);
+	sprintf(buf, "%sB2R2CLK: %#010x (%d kHz)\n", buf, reg_raw,
+		pllddr_cross_clk_freq(pllddr_freq, reg_raw));
+	
+	return strlen(buf);
+}
+ATTR_RO(pllddr_cross_clocks);
+
 static struct attribute *liveopp_attrs[] = {
 #if CONFIG_LIVEOPP_DEBUG > 1
 	&liveopp_start_interface.attr, 
@@ -1834,6 +2000,7 @@ static struct attribute *liveopp_attrs[] = {
 	&arm_step27_interface.attr, 
 	&arm_step28_interface.attr,
 	&pllddr_interface.attr, 
+	&pllddr_cross_clocks_interface.attr,
 	NULL,
 };
 
