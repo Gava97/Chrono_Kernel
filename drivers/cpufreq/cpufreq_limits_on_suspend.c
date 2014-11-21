@@ -27,6 +27,8 @@
 #include <linux/input.h>
 #include <linux/sysfs.h>
 
+#include <linux/mfd/dbx500-prcmu.h>
+
 static bool module_is_loaded = false; //FIXME: move code that uses module_is_loaded to init function
 static bool cpu_freq_limits = false;
 static bool is_suspend = false;
@@ -49,11 +51,28 @@ EXPORT_SYMBOL(last_input_time);
 
 #define MIN_INPUT_INTERVAL (150 * USEC_PER_MSEC)
 
-bool cpu_freq_limits_enabled(void) {
-	return cpu_freq_limits;
+static void requirements_add_thread(struct work_struct *requirements_add_work)
+{
+	if (prcmu_qos_add_requirement(PRCMU_QOS_DDR_OPP,
+			"codina_lcd_dpi", 25)) {
+		pr_info("pcrm_qos_add DDR failed\n");
+	}
+  
+	if (prcmu_qos_add_requirement(PRCMU_QOS_APE_OPP,
+			"codina_lcd_dpi", 50)) {
+		pr_info("pcrm_qos_add APE failed\n");
+	}
 }
+static DECLARE_WORK(requirements_add_work, requirements_add_thread);
 
-void cpufreq_limits_update(bool is_suspend_) {
+static void requirements_remove_thread(struct work_struct *requirements_remove_work)
+{
+	prcmu_qos_remove_requirement(PRCMU_QOS_DDR_OPP, "codina_lcd_dpi");
+	prcmu_qos_remove_requirement(PRCMU_QOS_APE_OPP, "codina_lcd_dpi");
+}
+static DECLARE_WORK(requirements_remove_work, requirements_remove_thread);
+
+static void cpufreq_limits_update(bool is_suspend_) {
 	int new_min, new_max;
 	
 	is_suspend = is_suspend_;
@@ -85,34 +104,35 @@ void cpufreq_limits_update(bool is_suspend_) {
 	}
 }  
 
+static struct work_struct early_suspend_work;
+static struct work_struct late_resume_work;
 
-static struct work_struct suspend_work;
-static struct work_struct resume_work;
-
-static void driver_suspend(struct early_suspend *handler)
+static void early_suspend_fn(struct early_suspend *handler)
 {
-	schedule_work(&suspend_work);
+	schedule_work(&early_suspend_work);
+	schedule_work(&requirements_remove_work);
 }
 
-static void driver_resume(struct early_suspend *handler)
+static void late_resume_fn(struct early_suspend *handler)
 {
-	schedule_work(&resume_work);
+	schedule_work(&requirements_add_work);
+	schedule_work(&late_resume_work);
 }
 
-static void suspend_work_fn(struct work_struct *work)
+static void early_suspend_work_fn(struct work_struct *work)
 {
 	cpufreq_limits_update(true);
 }
 
-static void resume_work_fn(struct work_struct *work)
+static void late_resume_work_fn(struct work_struct *work)
 {
 	cpufreq_limits_update(false);
 }
 
 static struct early_suspend driver_early_suspend = {
 	.level = EARLY_SUSPEND_LEVEL_BLANK_SCREEN + 1,
-	.suspend = driver_suspend,
-	.resume = driver_resume,
+	.suspend = early_suspend_fn,
+	.resume = late_resume_fn,
 };
 
 static int cpufreq_callback(struct notifier_block *nfb,
@@ -385,10 +405,22 @@ static int cpufreq_limits_driver_init(void)
 					 screenoff_min_cpufreq / 1000,  screenoff_max_cpufreq / 1000
 	);
 	
-	INIT_WORK(&suspend_work, suspend_work_fn);
-	INIT_WORK(&resume_work, resume_work_fn);
+	INIT_WORK(&early_suspend_work, early_suspend_work_fn);
+	INIT_WORK(&late_resume_work, late_resume_work_fn);
 	
 	register_early_suspend(&driver_early_suspend);
+	
+	//when screen is on, APE_OPP 25 sometimes messes it up
+	if (prcmu_qos_add_requirement(PRCMU_QOS_APE_OPP,
+				"codina_lcd_dpi", 50)) {
+			pr_info("pcrm_qos_add APE failed\n");
+	}
+	
+	if (prcmu_qos_add_requirement(PRCMU_QOS_DDR_OPP,
+				"codina_lcd_dpi", 25)) {
+			pr_info("pcrm_qos_add DDR failed\n");
+	}
+
 	
 	cpufreq_kobject = kobject_create_and_add("cpufreq", kernel_kobj);
 	if (!cpufreq_kobject) {
