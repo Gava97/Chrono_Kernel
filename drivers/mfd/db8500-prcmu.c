@@ -1247,10 +1247,10 @@ static struct liveopp_arm_table liveopp_arm[] = {
 	{ 900000,  898560, 0x00050175, 0x30, 0xDB, 100,  50},
 	{1000000,  998400, 0x00050182, 0x31, 0x8F, 100, 100},
 	{1100000, 1098240, 0x0005018F, 0x36, 0x8F, 100, 100},
-	{1150000, 1152000, 0x00050196, 0x36, 0x8F, 125, 100},
-	{1200000, 1198080, 0x0005019C, 0x37, 0x8F, 125, 100},
-	{1230000, 1228800, 0x000501A0, 0x38, 0x8F, 125, 100},
-	{1245000, 1244160, 0x000501A2, 0x38, 0x8F, 125, 100},
+	{1150000, 1152000, 0x00050196, 0x36, 0x8F, 100, 100},
+	{1200000, 1198080, 0x0005019C, 0x37, 0x8F, 100, 100},
+	{1230000, 1228800, 0x000501A0, 0x38, 0x8F, 100, 100},
+	{1245000, 1244160, 0x000501A2, 0x38, 0x8F, 100, 100},
 };
 #endif
 
@@ -1410,17 +1410,29 @@ static int pllarm_freq(u32 raw)
 	return pll;
 }
 
-static void update_register_value(int new_val, int reg, int usec)
+static int update_register_value(u32 new_val, int reg, int usec)
 {
-	u32 val;
-	int old_val = readl(prcmu_base + reg);
+	int i;
+	int new_divider, old_divider, r, r2;
+	u32 old_val = readl(prcmu_base + reg);
 	
-	if ((!old_val) || (old_val == new_val)) return;
+	if ((!old_val) || (old_val == new_val)) return -1;
 	
-	for (val = old_val;
-	     (new_val > old_val) ? (val <= new_val) : (val >= new_val); 
-	     (new_val > old_val) ? val++ : val--) {
-			writel_relaxed(val, prcmu_base + reg);
+	old_divider = old_val & 0xf;
+	new_divider = new_val & 0xf;
+	r = old_val ^ old_divider;
+	r2 = new_val ^ new_divider;
+	
+	if ((!new_divider) /*|| (r != r2)*/) {
+		pr_err("[LiveOPP] new_divider = %d", new_divider);
+		//pr_err("[LiveOPP] reg %#010x = %#010x, new_val = %#010x\n", reg, old_val, new_val);
+		//return -2;
+	}
+	
+	for (i = old_divider;
+	     (new_divider > old_divider) ? (i <= new_divider) : (i >= new_divider); 
+	     (new_divider > old_divider) ? i++ : i--) {
+			writel_relaxed(r | i, prcmu_base + reg);
 			udelay(usec);
 	}
 	
@@ -1437,7 +1449,7 @@ static u32 per2clk = 0x185;
 static u32 per3clk = 0x185;
 static u32 per5clk = 0x185;
 static u32 per6clk = 0x185;
-static u32 bcmclk = 0x003;
+static u32 bcmclk = 0x004;
 static u32 apeatclk = 0x183;
 static u32 apetraceclk = 0x184;
 static u32 mcdeclk = 0x185;
@@ -1449,36 +1461,36 @@ static void ddr_cross_clocks_boost(bool state)
 	if (state == ddr_boost_prev_state) return;
 	
 	if (state) {
-			//update_register_value(aclk, PRCMU_ACLK_REG, 50);      // OPP100: 0x184
-			//update_register_value(svaclk, PRCMU_SVACLK_REG, 50);    // OPP100: 0x002
-			//update_register_value(siaclk, PRCMU_SIACLK_REG, 50);    // OPP100: 0x002
-			update_register_value(per1clk, PRCMU_PER1CLK_REG, 20);     // OPP100: 0x186 
-			update_register_value(per2clk, PRCMU_PER2CLK_REG, 20);     // 
-			update_register_value(per3clk, PRCMU_PER3CLK_REG, 20);     // 
-			update_register_value(per5clk, PRCMU_PER5CLK_REG, 20);     // 
-			update_register_value(per6clk, PRCMU_PER6CLK_REG, 20);     // 
-			update_register_value(bcmclk, PRCMU_BMLCLK_REG, 50);      // OPP100: 0x004
-			update_register_value(apeatclk, PRCMU_APEATCLK_REG, 20);    // OPP100: 0x184
-			update_register_value(apetraceclk, PRCMU_APETRACECLK_REG, 20); // OPP100: 0x185
-			//update_register_value(mcdeclk, PRCMU_MCDECLK_REG, 50);   // OPP100: 0x185
-			update_register_value(dmaclk, PRCMU_DMACLK_REG, 50);      // OPP100: 0x184
-			update_register_value(b2r2clk, PRCMU_B2R2CLK_REG, 50);   // OPP100: 0x004
+			update_register_value(aclk, PRCMU_ACLK_REG, 10);      // OPP100: 0x184
+			update_register_value(svaclk, PRCMU_SVACLK_REG, 10);    // OPP100: 0x002
+			update_register_value(siaclk, PRCMU_SIACLK_REG, 10);    // OPP100: 0x002
+			update_register_value(per1clk, PRCMU_PER1CLK_REG, 10);
+			update_register_value(per2clk, PRCMU_PER2CLK_REG, 10);
+			update_register_value(per3clk, PRCMU_PER3CLK_REG, 10);   // 
+			update_register_value(per5clk, PRCMU_PER5CLK_REG, 10);     // 
+			update_register_value(per6clk, PRCMU_PER6CLK_REG, 10);     // 
+			update_register_value(bcmclk, PRCMU_BMLCLK_REG, 10);      // OPP100: 0x004
+			update_register_value(apeatclk, PRCMU_APEATCLK_REG, 10);    // OPP100: 0x184
+			update_register_value(apetraceclk, PRCMU_APETRACECLK_REG, 10); // OPP100: 0x185
+			update_register_value(mcdeclk, PRCMU_MCDECLK_REG, 10);   // OPP100: 0x185
+			update_register_value(dmaclk, PRCMU_DMACLK_REG, 10);      // OPP100: 0x184
+			update_register_value(b2r2clk, PRCMU_B2R2CLK_REG, 10);   // OPP100: 0x004
 			//pr_err("[LiveOPP] boost ddr clocks\n");
 	} else	{
-			//update_register_value(0x184, PRCMU_ACLK_REG, 50);
-			//update_register_value(0x002, PRCMU_SVACLK_REG, 50);
-			//update_register_value(0x002, PRCMU_SIACLK_REG, 50);
-			update_register_value(0x186, PRCMU_PER1CLK_REG, 20);
-			update_register_value(0x186, PRCMU_PER2CLK_REG, 20);
-			update_register_value(0x186, PRCMU_PER3CLK_REG, 20);
-			update_register_value(0x186, PRCMU_PER5CLK_REG, 20);
-			update_register_value(0x186, PRCMU_PER6CLK_REG, 20);
-			update_register_value(0x004, PRCMU_BMLCLK_REG, 50);
-			update_register_value(0x184, PRCMU_APEATCLK_REG, 20);
-			update_register_value(0x185, PRCMU_APETRACECLK_REG, 20);
-			//update_register_value(0x185, PRCMU_MCDECLK_REG, 50);
-			update_register_value(0x184, PRCMU_DMACLK_REG, 50);
-			update_register_value(0x004, PRCMU_B2R2CLK_REG, 50);
+			update_register_value(0x184, PRCMU_ACLK_REG, 10);
+			update_register_value(0x002, PRCMU_SVACLK_REG, 10);
+			update_register_value(0x002, PRCMU_SIACLK_REG, 10);
+			update_register_value(0x186, PRCMU_PER1CLK_REG, 10);
+			update_register_value(0x186, PRCMU_PER2CLK_REG, 10);
+			update_register_value(0x186, PRCMU_PER3CLK_REG, 10);   // 
+			update_register_value(0x186, PRCMU_PER5CLK_REG, 10);     // 
+			update_register_value(0x186, PRCMU_PER6CLK_REG, 10);     //      // 
+			update_register_value(0x004, PRCMU_BMLCLK_REG, 10);      // OPP100: 0x004
+			update_register_value(0x184, PRCMU_APEATCLK_REG, 10);    // OPP100: 0x184
+			update_register_value(0x185, PRCMU_APETRACECLK_REG, 10); // OPP100: 0x185
+			update_register_value(0x185, PRCMU_MCDECLK_REG, 10);
+			update_register_value(0x184, PRCMU_DMACLK_REG, 10);
+			update_register_value(0x004, PRCMU_B2R2CLK_REG, 10);
 			//pr_err("[LiveOPP] unboost ddr clocks\n");
 	}
 	
