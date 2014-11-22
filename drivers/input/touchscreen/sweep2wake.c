@@ -47,7 +47,7 @@ static struct input_dev * sweep2wake_pwrdev;
 static DEFINE_MUTEX(pwrkeyworklock);
 
 #ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE_WAKELOCK
-static bool use_wakelock = true;
+static bool use_wakelock = false;
 static struct wake_lock s2w_wake_lock;
 #endif
 

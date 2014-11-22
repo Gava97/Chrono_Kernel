@@ -49,7 +49,7 @@ static struct input_dev * doubletap2wake_pwrdev;
 static DEFINE_MUTEX(pwrkeyworklock);
 
 #ifdef CONFIG_TOUCHSCREEN_DOUBLETAP2WAKE_WAKELOCK
-static bool use_wakelock = true;
+static bool use_wakelock = false;
 static struct wake_lock dt2w_wake_lock;
 #endif
 
