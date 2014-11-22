@@ -1440,15 +1440,18 @@ static struct prcmu_regs_table prcmu_regs[] = {
 
 static struct liveopp_arm_table curr_table; // LiveOPP step that uses at the moment 
 
+static bool pllddr_opp_lock = false;
+
+static int db8500_prcmu_get_ddr_opp(void);
+
 static void ddr_cross_clocks_boost(bool state)
 {
-	int i;
+	int i, val, ddr_opp;
 	u32 old_val, new_val;
 	int new_divider, old_divider, base;
 	
-	//  set DDR_OPP=100 since boost/unboost values only for OPP100
-	prcmu_qos_update_requirement(PRCMU_QOS_DDR_OPP, "cpufreq", 100);
-		
+	pllddr_opp_lock = true;
+	
 	for (i = 0; i < ARRAY_SIZE(prcmu_regs); i++) {
 				old_val = readl(prcmu_base + prcmu_regs[i].reg);
 		
@@ -1468,18 +1471,33 @@ static void ddr_cross_clocks_boost(bool state)
 				}
 
 				base = old_val ^ old_divider;
+				
+				ddr_opp = readb(PRCM_DDR_SUBSYS_APE_MINBW);
+				
+				if (ddr_opp != DDR_100_OPP) new_divider *= 2;
+				
+				new_val = base | new_divider;
+				
+				pr_err("[LiveOPP] set %s=%#05x -> %#05x\n", prcmu_regs[i].name, 
+									      old_val, new_val);
 	
-				writel_relaxed(base | new_divider, prcmu_base + prcmu_regs[i].reg);
+				for (val = old_val;
+				    (new_val > old_val) ? (val <= new_val) : (val >= new_val); 
+				    (new_val > old_val) ? val++ : val--)  {
+					      writel_relaxed(val, prcmu_base + prcmu_regs[i].reg);
+					      udelay(200);
+				}
+
 			}
 			
-	prcmu_qos_update_requirement(PRCMU_QOS_DDR_OPP, "cpufreq",
-			(signed char)curr_table.ddr_opp);
+	pllddr_opp_lock = false;
 }
 
 static void requirements_update_thread(struct work_struct *requirements_update_work)
 {
-	prcmu_qos_update_requirement(PRCMU_QOS_DDR_OPP, "cpufreq",
-				(signed char)curr_table.ddr_opp);
+	if (!pllddr_opp_lock)
+		prcmu_qos_update_requirement(PRCMU_QOS_DDR_OPP, "cpufreq",
+					(signed char)curr_table.ddr_opp);
 	
 	prcmu_qos_update_requirement(PRCMU_QOS_APE_OPP, "cpufreq",
 				(signed char)curr_table.ape_opp);
@@ -1864,7 +1882,7 @@ static ssize_t pllddr_store(struct kobject *kobj, struct kobj_attribute *attr, c
 	     (new_val > old_val) ? (val <= new_val) : (val >= new_val); 
 	     (new_val > old_val) ? val++ : val--) {
 			writel_relaxed(val, prcmu_base + PRCMU_PLLDDR_REG);
-			udelay(100);
+			udelay(200);
 	}
 	
 	return count;
@@ -1886,16 +1904,16 @@ static ssize_t pllddr_cross_clocks_show(struct kobject *kobj, struct kobj_attrib
 	u32 pllddr_value, reg_value;
 	int i, pllddr_freq, ddr_opp;
 	
+	pllddr_value = readl(prcmu_base + PRCMU_PLLDDR_REG);
+	pllddr_freq = pllarm_freq(pllddr_value);
+
+	sprintf(buf, "Clocks boost: %s\n", ddr_clocks_boost ? "on" : "off");
+	
 	ddr_opp = readb(PRCM_DDR_SUBSYS_APE_MINBW);
 	
 	if (ddr_opp == DDR_100_OPP) ddr_opp = 100;
 	else if (ddr_opp == DDR_50_OPP) ddr_opp = 50;
 	else if (ddr_opp == DDR_25_OPP) ddr_opp = 25;
-	
-	pllddr_value = readl(prcmu_base + PRCMU_PLLDDR_REG);
-	pllddr_freq = pllarm_freq(pllddr_value);
-
-	sprintf(buf, "Clocks boost: %s\n", ddr_clocks_boost ? "on" : "off");
 
 	sprintf(buf, "%sDDR_OPP: %d\n"
 		     "PLLDDR: %d kHz\n\n", buf, ddr_opp, pllddr_freq);
@@ -1909,7 +1927,7 @@ static ssize_t pllddr_cross_clocks_show(struct kobject *kobj, struct kobj_attrib
 									 prcmu_regs[i].boost_value));
 	}
 	
-	sprintf(buf, "%s\nCurrent clocks(OPP100)\n", buf);
+	sprintf(buf, "%s\nCurrent clocks\n", buf);
 	
 	for (i = 0; i < ARRAY_SIZE(prcmu_regs); i++) {
 
@@ -5272,6 +5290,7 @@ static void  db8500_prcmu_update_freq(void *pdata)
 				break;
 		}
 	}
+
 	#else /* CONFIG_DB8500_LIVEOPP */
 	if  (!db8500_prcmu_has_arm_maxopp())
 		return;
