@@ -1410,111 +1410,79 @@ static int pllarm_freq(u32 raw)
 	return pll;
 }
 
-static int update_register_value(u32 new_val, int reg, int usec)
+struct prcmu_regs_table
 {
-	int i;
-	int new_divider, old_divider, r, r2;
-	u32 old_val = readl(prcmu_base + reg);
-	
-	if ((!old_val) || (old_val == new_val)) return -1;
-	
-	old_divider = old_val & 0xf;
-	new_divider = new_val & 0xf;
-	r = old_val ^ old_divider;
-	r2 = new_val ^ new_divider;
-	
-	if ((!new_divider) /*|| (r != r2)*/) {
-		pr_err("[LiveOPP] new_divider = %d", new_divider);
-		//pr_err("[LiveOPP] reg %#010x = %#010x, new_val = %#010x\n", reg, old_val, new_val);
-		//return -2;
-	}
-	
-	for (i = old_divider;
-	     (new_divider > old_divider) ? (i <= new_divider) : (i >= new_divider); 
-	     (new_divider > old_divider) ? i++ : i--) {
-			writel_relaxed(r | i, prcmu_base + reg);
-			udelay(usec);
-	}
-	
-}
+	u32 reg;
+	u32 boost_value;
+	u32 unboost_value;
+	char *name;
+};
 
-static bool ddr_boost_prev_state = false;
+static bool ddr_clocks_boost = false;
 
-// ddr-related clocks, default values in boosted condition
-static u32 aclk = 0x184;
-static u32 svaclk = 0x002;
-static u32 siaclk = 0x002;
-static u32 per1clk = 0x185;
-static u32 per2clk = 0x185;
-static u32 per3clk = 0x185;
-static u32 per5clk = 0x185;
-static u32 per6clk = 0x185;
-static u32 bcmclk = 0x004;
-static u32 apeatclk = 0x183;
-static u32 apetraceclk = 0x184;
-static u32 mcdeclk = 0x185;
-static u32 dmaclk = 0x183;
-static u32 b2r2clk = 0x004;
+static struct prcmu_regs_table prcmu_regs[] = {
+      // PRCMU reg            | Boost val   | Unboost val|      Name     
+	{PRCMU_ACLK_REG,	0x183,       0x184,	       "aclk"},
+	{PRCMU_SVACLK_REG,	0x002,       0x002,	     "svaclk"},
+	{PRCMU_SIACLK_REG,	0x002,       0x002,	     "siaclk"}, 
+	{PRCMU_PER1CLK_REG,	0x185,       0x186,	    "per1clk"},
+	{PRCMU_PER2CLK_REG,	0x185,       0x186,	    "per2clk"},
+	{PRCMU_PER3CLK_REG,	0x185,       0x186,	    "per3clk"},
+	{PRCMU_PER5CLK_REG,	0x185,       0x186,	    "per5clk"},
+	{PRCMU_PER6CLK_REG,	0x185,       0x186,	    "per6clk"},
+	{PRCMU_BMLCLK_REG,	0x003,       0x004,          "bmlclk"},
+	{PRCMU_APEATCLK_REG,	0x183,       0x184,	   "apeatclk"},
+	{PRCMU_APETRACECLK_REG,	0x184,       0x185,	"apetraceclk"},
+	{PRCMU_MCDECLK_REG,	0x185,       0x185,	    "mcdeclk"},
+	{PRCMU_DMACLK_REG,	0x183,       0x184,          "dmaclk"},
+	{PRCMU_B2R2CLK_REG,	0x004,       0x004,	    "b2r2clk"},
+};
+
+static struct liveopp_arm_table curr_table; // LiveOPP step that uses at the moment 
 
 static void ddr_cross_clocks_boost(bool state)
 {
-	if (state == ddr_boost_prev_state) return;
+	int i;
+	u32 old_val, new_val;
+	int new_divider, old_divider, base;
 	
-	if (state) {
-			update_register_value(aclk, PRCMU_ACLK_REG, 10);      // OPP100: 0x184
-			update_register_value(svaclk, PRCMU_SVACLK_REG, 10);    // OPP100: 0x002
-			update_register_value(siaclk, PRCMU_SIACLK_REG, 10);    // OPP100: 0x002
-			update_register_value(per1clk, PRCMU_PER1CLK_REG, 10);
-			update_register_value(per2clk, PRCMU_PER2CLK_REG, 10);
-			update_register_value(per3clk, PRCMU_PER3CLK_REG, 10);   // 
-			update_register_value(per5clk, PRCMU_PER5CLK_REG, 10);     // 
-			update_register_value(per6clk, PRCMU_PER6CLK_REG, 10);     // 
-			update_register_value(bcmclk, PRCMU_BMLCLK_REG, 10);      // OPP100: 0x004
-			update_register_value(apeatclk, PRCMU_APEATCLK_REG, 10);    // OPP100: 0x184
-			update_register_value(apetraceclk, PRCMU_APETRACECLK_REG, 10); // OPP100: 0x185
-			update_register_value(mcdeclk, PRCMU_MCDECLK_REG, 10);   // OPP100: 0x185
-			update_register_value(dmaclk, PRCMU_DMACLK_REG, 10);      // OPP100: 0x184
-			update_register_value(b2r2clk, PRCMU_B2R2CLK_REG, 10);   // OPP100: 0x004
-			//pr_err("[LiveOPP] boost ddr clocks\n");
-	} else	{
-			update_register_value(0x184, PRCMU_ACLK_REG, 10);
-			update_register_value(0x002, PRCMU_SVACLK_REG, 10);
-			update_register_value(0x002, PRCMU_SIACLK_REG, 10);
-			update_register_value(0x186, PRCMU_PER1CLK_REG, 10);
-			update_register_value(0x186, PRCMU_PER2CLK_REG, 10);
-			update_register_value(0x186, PRCMU_PER3CLK_REG, 10);   // 
-			update_register_value(0x186, PRCMU_PER5CLK_REG, 10);     // 
-			update_register_value(0x186, PRCMU_PER6CLK_REG, 10);     //      // 
-			update_register_value(0x004, PRCMU_BMLCLK_REG, 10);      // OPP100: 0x004
-			update_register_value(0x184, PRCMU_APEATCLK_REG, 10);    // OPP100: 0x184
-			update_register_value(0x185, PRCMU_APETRACECLK_REG, 10); // OPP100: 0x185
-			update_register_value(0x185, PRCMU_MCDECLK_REG, 10);
-			update_register_value(0x184, PRCMU_DMACLK_REG, 10);
-			update_register_value(0x004, PRCMU_B2R2CLK_REG, 10);
-			//pr_err("[LiveOPP] unboost ddr clocks\n");
-	}
+	//  set DDR_OPP=100 since boost/unboost values only for OPP100
+	prcmu_qos_update_requirement(PRCMU_QOS_DDR_OPP, "cpufreq", 100);
+		
+	for (i = 0; i < ARRAY_SIZE(prcmu_regs); i++) {
+				old_val = readl(prcmu_base + prcmu_regs[i].reg);
+		
+				new_val = state ? prcmu_regs[i].boost_value :
+						prcmu_regs[i].unboost_value;
+						
+				if ((!old_val) || (old_val == new_val)) continue;
 	
-	ddr_boost_prev_state = state;
-}
+				old_divider = old_val & 0xf;
+				new_divider = new_val & 0xf;
+				
+				if (!new_divider) {
+					pr_err("LiveOPP: bad divider, %s:%s:%#05x:\n", __func__, 
+						    prcmu_regs[i].name,
+						    new_val);
+					continue;
+				}
 
-static struct liveopp_arm_table curr_table;
+				base = old_val ^ old_divider;
+	
+				writel_relaxed(base | new_divider, prcmu_base + prcmu_regs[i].reg);
+			}
+			
+	prcmu_qos_update_requirement(PRCMU_QOS_DDR_OPP, "cpufreq",
+			(signed char)curr_table.ddr_opp);
+}
 
 static void requirements_update_thread(struct work_struct *requirements_update_work)
 {
-		
-	if (curr_table.ddr_opp > 100) {
-		prcmu_qos_update_requirement(PRCMU_QOS_DDR_OPP, "cpufreq",
-					(signed char)100);
-		ddr_cross_clocks_boost(true);
-		
-	} else {
-		ddr_cross_clocks_boost(false);
-		prcmu_qos_update_requirement(PRCMU_QOS_DDR_OPP, "cpufreq",
-					(signed char)curr_table.ddr_opp);
-	}	
+	prcmu_qos_update_requirement(PRCMU_QOS_DDR_OPP, "cpufreq",
+				(signed char)curr_table.ddr_opp);
 	
 	prcmu_qos_update_requirement(PRCMU_QOS_APE_OPP, "cpufreq",
-					(signed char)curr_table.ape_opp);
+				(signed char)curr_table.ape_opp);
 }
 static DECLARE_WORK(requirements_update_work, requirements_update_thread);
 
@@ -1790,7 +1758,7 @@ static ssize_t arm_step_store(struct kobject *kobj, struct kobj_attribute *attr,
 
 	if (!strncmp(buf, "ddropp=", 7)) {
 		ret = sscanf(&buf[7], "%d", &val);
-		if ((!ret) || (val != 25 && val != 50 && val != 100 && val != 125 && val != -1 && val != -2)) {
+		if ((!ret) || (val != 25 && val != 50 && val != 100 && val != -1 && val != -2)) {
 			pr_err("[LiveOPP] Invalid QOS_DDR_OPP value."
 			"Enter 25, 50, 100 or 125\n");
 			return -EINVAL;
@@ -1915,159 +1883,72 @@ static int pllddr_cross_clk_freq(int pllddr_freq, u32 reg_raw)
 
 static ssize_t pllddr_cross_clocks_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
 {
-	u32 pllddr_raw, reg_raw;
-	int pllddr_freq;
+	u32 pllddr_value, reg_value;
+	int i, pllddr_freq, ddr_opp;
 	
-	pllddr_raw = readl(prcmu_base + PRCMU_PLLDDR_REG);
-	pllddr_freq = pllarm_freq(pllddr_raw);
+	ddr_opp = readb(PRCM_DDR_SUBSYS_APE_MINBW);
 	
-	sprintf(buf, "DDR_OPP: %d\n"
-		     "PLLDDR: %d kHz\n\n", curr_table.ddr_opp, pllddr_freq);
+	if (ddr_opp == DDR_100_OPP) ddr_opp = 100;
+	else if (ddr_opp == DDR_50_OPP) ddr_opp = 50;
+	else if (ddr_opp == DDR_25_OPP) ddr_opp = 25;
+	
+	pllddr_value = readl(prcmu_base + PRCMU_PLLDDR_REG);
+	pllddr_freq = pllarm_freq(pllddr_value);
 
-	reg_raw = readl(prcmu_base + PRCMU_ACLK_REG);
+	sprintf(buf, "Clocks boost: %s\n", ddr_clocks_boost ? "on" : "off");
+
+	sprintf(buf, "%sDDR_OPP: %d\n"
+		     "PLLDDR: %d kHz\n\n", buf, ddr_opp, pllddr_freq);
 	
-	sprintf(buf, "%sACLK: %#010x (%d kHz)\n", buf, reg_raw,
-		pllddr_cross_clk_freq(pllddr_freq, reg_raw));
+	sprintf(buf, "%sBoost settings (OPP100)\n", buf);
 	
-	reg_raw = readl(prcmu_base + PRCMU_SVACLK_REG);
-	sprintf(buf, "%sSVACLK: %#010x (%d kHz)\n", buf, reg_raw,
-		pllddr_cross_clk_freq(pllddr_freq, reg_raw));
+	for (i = 0; i < ARRAY_SIZE(prcmu_regs); i++) {
+	  
+		sprintf(buf, "%s%s=%#05x   (%d kHz)\n", buf, prcmu_regs[i].name, 
+		        prcmu_regs[i].boost_value, pllddr_cross_clk_freq(pllddr_freq,
+									 prcmu_regs[i].boost_value));
+	}
 	
-	reg_raw = readl(prcmu_base + PRCMU_SIACLK_REG);
-	sprintf(buf, "%sSIACLK: %#010x (%d kHz)\n", buf, reg_raw,
-		pllddr_cross_clk_freq(pllddr_freq, reg_raw));
-		
-	reg_raw = readl(prcmu_base + PRCMU_PER1CLK_REG);
-	sprintf(buf, "%sPER1CLK: %#010x (%d kHz)\n", buf, reg_raw,
-		pllddr_cross_clk_freq(pllddr_freq, reg_raw));
+	sprintf(buf, "%s\nCurrent clocks(OPP100)\n", buf);
 	
-	reg_raw = readl(prcmu_base + PRCMU_PER2CLK_REG);
-	sprintf(buf, "%sPER2CLK: %#010x (%d kHz)\n", buf, reg_raw,
-		pllddr_cross_clk_freq(pllddr_freq, reg_raw));
-	
-	reg_raw = readl(prcmu_base + PRCMU_PER3CLK_REG);
-	sprintf(buf, "%sPER3CLK: %#010x (%d kHz)\n", buf, reg_raw,
-		pllddr_cross_clk_freq(pllddr_freq, reg_raw));
-	
-	reg_raw = readl(prcmu_base + PRCMU_PER5CLK_REG);
-	sprintf(buf, "%sPER5CLK: %#010x (%d kHz)\n", buf, reg_raw,
-		pllddr_cross_clk_freq(pllddr_freq, reg_raw));
-	
-	reg_raw = readl(prcmu_base + PRCMU_PER6CLK_REG);
-	sprintf(buf, "%sPER6CLK: %#010x (%d kHz)\n", buf, reg_raw,
-		pllddr_cross_clk_freq(pllddr_freq, reg_raw));
-	
-	reg_raw = readl(prcmu_base + PRCMU_BMLCLK_REG);
-	sprintf(buf, "%sBMLCLK: %#010x (%d kHz)\n", buf, reg_raw,
-		pllddr_cross_clk_freq(pllddr_freq, reg_raw));
-	
-	reg_raw = readl(prcmu_base + PRCMU_APEATCLK_REG);
-	sprintf(buf, "%sAPEATCLK: %#010x (%d kHz)\n", buf, reg_raw,
-		pllddr_cross_clk_freq(pllddr_freq, reg_raw));
-	
-	reg_raw = readl(prcmu_base + PRCMU_APETRACECLK_REG);
-	sprintf(buf, "%sAPETRACECLK: %#010x (%d kHz)\n", buf, reg_raw,
-		pllddr_cross_clk_freq(pllddr_freq, reg_raw));
-	
-	reg_raw = readl(prcmu_base + PRCMU_MCDECLK_REG);
-	sprintf(buf, "%sMCDECLK: %#010x (%d kHz)\n", buf, reg_raw,
-		pllddr_cross_clk_freq(pllddr_freq, reg_raw));
-	
-	reg_raw = readl(prcmu_base + PRCMU_DMACLK_REG);
-	sprintf(buf, "%sDMACLK: %#010x (%d kHz)\n", buf, reg_raw,
-		pllddr_cross_clk_freq(pllddr_freq, reg_raw));
-	
-	reg_raw = readl(prcmu_base + PRCMU_B2R2CLK_REG);
-	sprintf(buf, "%sB2R2CLK: %#010x (%d kHz)\n", buf, reg_raw,
-		pllddr_cross_clk_freq(pllddr_freq, reg_raw));
-	
+	for (i = 0; i < ARRAY_SIZE(prcmu_regs); i++) {
+
+		reg_value = readl(prcmu_base + prcmu_regs[i].reg);
+		sprintf(buf, "%s%s=%#05x   (%d kHz)\n", buf, prcmu_regs[i].name, 
+			reg_value,     pllddr_cross_clk_freq(pllddr_freq, reg_value));
+	}
+
 	return strlen(buf);
 }
 
 static ssize_t pllddr_cross_clocks_store(struct kobject *kobj, struct kobj_attribute *attr, const char *buf, size_t count)
 {
-	if (!strncmp(&buf[0], "per1clk=", 8)) {
-		if (!sscanf(&buf[8], "%d", &per1clk))
-			goto invalid_input;
-		return count;
+	int i, len;
+
+	u32 val;
+	
+	if (!strncmp(&buf[0], "on", 2)) {
+		ddr_clocks_boost = true;
+		ddr_cross_clocks_boost(ddr_clocks_boost);
 	}
 	
-	if (!strncmp(&buf[0], "per2clk=", 8)) {
-		if (!sscanf(&buf[8], "%d", &per2clk))
-			goto invalid_input;
-		return count;
+	if (!strncmp(&buf[0], "off", 3)) {
+		ddr_clocks_boost = false;
+		ddr_cross_clocks_boost(ddr_clocks_boost);
 	}
 	
-	if (!strncmp(&buf[0], "per3clk=", 8)) {
-		if (!sscanf(&buf[8], "%d", &per3clk))
-			goto invalid_input;
-		return count;
-	}
 	
-	if (!strncmp(&buf[0], "per5clk=", 8)) {
-		if (!sscanf(&buf[8], "%d", &per5clk))
-			goto invalid_input;
-		return count;
-	}
-	
-	if (!strncmp(&buf[0], "per6clk=", 8)) {
-		if (!sscanf(&buf[8], "%d", &per6clk))
-			goto invalid_input;
-		return count;
-	}
-	
-	if (!strncmp(&buf[0], "bcmclk=", 7)) {
-		if (!sscanf(&buf[7], "%d", &bcmclk))
-			goto invalid_input;
-		return count;
-	}
-	
-	if (!strncmp(&buf[0], "apeatclk=", 9)) {
-		if (!sscanf(&buf[9], "%d", &apeatclk))
-			goto invalid_input;
-		return count;
-	}
-	
-	if (!strncmp(&buf[0], "apetraceclk=", 12)) {
-		if (!sscanf(&buf[12], "%d", &apetraceclk))
-			goto invalid_input;
-		return count;
-	}
-	
-	if (!strncmp(&buf[0], "mcdeclk=", 8)) {
-		if (!sscanf(&buf[8], "%d", &mcdeclk))
-			goto invalid_input;
-		return count;
-	}
-	
-	if (!strncmp(&buf[0], "dmaclk=", 7)) {
-		if (!sscanf(&buf[7], "%d", &dmaclk))
-			goto invalid_input;
-		return count;
-	}
-	
-	if (!strncmp(&buf[0], "b2r2clk=", 8)) {
-		if (!sscanf(&buf[8], "%d", &b2r2clk))
-			goto invalid_input;
-		return count;
-	}
-  
-	if (!strncmp(&buf[0], "svaclk=", 7)) {
-		if (!sscanf(&buf[7], "%d", &svaclk))
-			goto invalid_input;
-		return count;
-	}
-	
-	if (!strncmp(&buf[0], "siaclk=", 7)) {
-		if (!sscanf(&buf[7], "%d", &siaclk))
-			goto invalid_input;
-		return count;
-	}
-	
-	if (!strncmp(&buf[0], "aclk=", 5)) {
-		if (!sscanf(&buf[5], "%d", &aclk))
-			goto invalid_input;
-		return count;
+	for (i = 0; i < ARRAY_SIZE(prcmu_regs); i++) {
+		len = strlen(prcmu_regs[i].name);
+	  
+		if (!strncmp(&buf[0], prcmu_regs[i].name, len)) {
+			if (!sscanf(&buf[len + 1], "%x", &val))
+				  goto invalid_input;
+			
+			prcmu_regs[i].boost_value = val;
+			
+			return count;
+		}
 	}
 	
 invalid_input:
