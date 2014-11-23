@@ -53,11 +53,6 @@ EXPORT_SYMBOL(last_input_time);
 
 static void requirements_add_thread(struct work_struct *requirements_add_work)
 {
-	if (prcmu_qos_add_requirement(PRCMU_QOS_DDR_OPP,
-			"codina_lcd_dpi", 25)) {
-		pr_info("pcrm_qos_add DDR failed\n");
-	}
-  
 	if (prcmu_qos_add_requirement(PRCMU_QOS_APE_OPP,
 			"codina_lcd_dpi", 50)) {
 		pr_info("pcrm_qos_add APE failed\n");
@@ -67,7 +62,6 @@ static DECLARE_WORK(requirements_add_work, requirements_add_thread);
 
 static void requirements_remove_thread(struct work_struct *requirements_remove_work)
 {
-	prcmu_qos_remove_requirement(PRCMU_QOS_DDR_OPP, "codina_lcd_dpi");
 	prcmu_qos_remove_requirement(PRCMU_QOS_APE_OPP, "codina_lcd_dpi");
 }
 static DECLARE_WORK(requirements_remove_work, requirements_remove_thread);
@@ -415,13 +409,7 @@ static int cpufreq_limits_driver_init(void)
 				"codina_lcd_dpi", 50)) {
 			pr_info("pcrm_qos_add APE failed\n");
 	}
-	
-	if (prcmu_qos_add_requirement(PRCMU_QOS_DDR_OPP,
-				"codina_lcd_dpi", 25)) {
-			pr_info("pcrm_qos_add DDR failed\n");
-	}
 
-	
 	cpufreq_kobject = kobject_create_and_add("cpufreq", kernel_kobj);
 	if (!cpufreq_kobject) {
 		pr_err("[cpufreq] Failed to create kobject interface\n");
