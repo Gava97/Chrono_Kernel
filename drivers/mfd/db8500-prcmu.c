@@ -1902,21 +1902,14 @@ static int pllddr_cross_clk_freq(int pllddr_freq, u32 reg_raw)
 static ssize_t pllddr_cross_clocks_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
 {
 	u32 pllddr_value, reg_value;
-	int i, pllddr_freq, ddr_opp;
+	int i, pllddr_freq;
 	
 	pllddr_value = readl(prcmu_base + PRCMU_PLLDDR_REG);
 	pllddr_freq = pllarm_freq(pllddr_value);
 
 	sprintf(buf, "Clocks boost: %s\n", ddr_clocks_boost ? "on" : "off");
-	
-	ddr_opp = readb(PRCM_DDR_SUBSYS_APE_MINBW);
-	
-	if (ddr_opp == DDR_100_OPP) ddr_opp = 100;
-	else if (ddr_opp == DDR_50_OPP) ddr_opp = 50;
-	else if (ddr_opp == DDR_25_OPP) ddr_opp = 25;
 
-	sprintf(buf, "%sDDR_OPP: %d\n"
-		     "PLLDDR: %d kHz\n\n", buf, ddr_opp, pllddr_freq);
+	sprintf(buf, "%sPLLDDR: %d kHz\n\n", buf, pllddr_freq);
 	
 	sprintf(buf, "%sBoost settings (OPP100)\n", buf);
 	
@@ -1968,6 +1961,8 @@ static ssize_t pllddr_cross_clocks_store(struct kobject *kobj, struct kobj_attri
 			return count;
 		}
 	}
+
+	return count;
 	
 invalid_input:
 	pr_err("LiveOPP: invalid input in %s", __func__);
