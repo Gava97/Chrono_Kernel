@@ -1860,7 +1860,7 @@ u32 pllddr_get_raw(void)
 }
 EXPORT_SYMBOL(pllddr_get_raw);
 
-void pllddr_set_raw(u32 new_val)
+void pllddr_set_raw(u32 new_val, int usec)
 {
 	u32 val, old_val;
 	int old_divider, new_divider;
@@ -1879,11 +1879,7 @@ void pllddr_set_raw(u32 new_val)
 		  (new_val > old_val) ? (val <= new_val) : (val >= new_val);
 		  (new_val > old_val) ? val++ : val--) {
 			writel_relaxed(val, prcmu_base + PRCMU_PLLDDR_REG);
-			
-			if ((val < 0x50172) && (val > 0x5015E))
-				udelay(150);
-			else
-				udelay(250);
+			udelay(usec);
 	}
 }
 EXPORT_SYMBOL(pllddr_set_raw);
@@ -1898,7 +1894,7 @@ static ssize_t pllddr_store(struct kobject *kobj, struct kobj_attribute *attr, c
 	if (!ret)
 		return -EINVAL;
 
-	pllddr_set_raw(new_val);
+	pllddr_set_raw(new_val, 100);
 	
 	return count;
 }
