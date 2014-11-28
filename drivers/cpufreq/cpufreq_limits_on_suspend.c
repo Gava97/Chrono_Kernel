@@ -70,6 +70,26 @@ EXPORT_SYMBOL(last_input_time);
 extern u32 pllddr_get_raw(void);
 extern void pllddr_set_raw(u32, int);
 
+int screen_off_max_cpufreq_get_(void) {
+	return screenoff_max_cpufreq;
+}
+EXPORT_SYMBOL(screen_off_max_cpufreq_get_);
+
+int screen_on_min_cpufreq_get_(void) {
+	return screenon_min_cpufreq;
+}
+EXPORT_SYMBOL(screen_on_min_cpufreq_get_);
+
+bool cpu_freq_limits_get(void) {
+	return cpu_freq_limits;
+}
+EXPORT_SYMBOL(cpu_freq_limits_get);
+
+bool is_suspended_get(void) {
+	return is_suspend;
+}
+EXPORT_SYMBOL(is_suspended_get);
+
 static void requirements_add_thread(struct work_struct *requirements_add_work)
 {
 	if (prcmu_qos_add_requirement(PRCMU_QOS_APE_OPP,
