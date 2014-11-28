@@ -38,7 +38,7 @@
 #endif
 
 #define MALI_HIGH_TO_LOW_LEVEL_UTILIZATION_LIMIT 64
-#define MALI_LOW_TO_HIGH_LEVEL_UTILIZATION_LIMIT 192
+#define MALI_LOW_TO_HIGH_LEVEL_UTILIZATION_LIMIT 150
 
 #define MALI_UX500_VERSION		"1.0.1"
 
@@ -57,7 +57,7 @@
 #define AB8500_VAPE_MAX_UV		1362500
 
 #define MALI_CLOCK_DEFLO		399360
-#define MALI_CLOCK_DEFHI		480000
+#define MALI_CLOCK_DEFHI		600000
 
 struct mali_dvfs_data
 {
@@ -115,11 +115,11 @@ static u32 boost_enable 	= 0;
 static u32 boost_working 	= 0;
 static u32 boost_scheduled 	= 0;
 static u32 boost_required 	= 0;
-static u32 boost_delay 		= 1000;
+static u32 boost_delay 		= 500;
 static u32 boost_low 		= 0;
 static u32 boost_high 		= 0;
-static u32 boost_upthreshold 	= 233;
-static u32 boost_downthreshold 	= 64;
+static u32 boost_upthreshold 	= 150;
+static u32 boost_downthreshold 	= 32;
 //mutex to protect above variables
 static DEFINE_MUTEX(mali_boost_lock);
 
