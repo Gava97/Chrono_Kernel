@@ -1854,36 +1854,51 @@ static ssize_t pllddr_show(struct kobject *kobj, struct kobj_attribute *attr, ch
 	return sprintf(buf, "PLLDDR: %#010x (%d kHz)\n", val,  pllarm_freq(val));
 }
 
-static ssize_t pllddr_store(struct kobject *kobj, struct kobj_attribute *attr, const char *buf, size_t count)
+u32 pllddr_get_raw(void)
 {
-	u32 val, old_val, new_val;
-	int ret, old_divider, new_divider;
+	return readl(prcmu_base + PRCMU_PLLDDR_REG);
+}
+EXPORT_SYMBOL(pllddr_get_raw);
+
+void pllddr_set_raw(u32 new_val)
+{
+	u32 val, old_val;
+	int old_divider, new_divider;
 
 	old_val = readl(prcmu_base + PRCMU_PLLDDR_REG);
-	ret = sscanf(buf, "%x", &new_val);
-		
-	if (!ret)
-		return -EINVAL;
 	
 	old_divider = (old_val & 0x00FF0000) >> 16;
 	new_divider = (new_val & 0x00FF0000) >> 16;
 	
 	if (new_divider != old_divider)
 	{ 
-		/* changing divider is unstable */
-		return -EINVAL;
+		return;
 	}
 
-       /*
-	* I don't know why, but if we immediately set new value to PRCMU_PLLDDR_REG,
-	* it'll cause reboot. Only following way works properly.
-	*/
 	for (val = old_val;
-	     (new_val > old_val) ? (val <= new_val) : (val >= new_val); 
-	     (new_val > old_val) ? val++ : val--) {
+		  (new_val > old_val) ? (val <= new_val) : (val >= new_val);
+		  (new_val > old_val) ? val++ : val--) {
 			writel_relaxed(val, prcmu_base + PRCMU_PLLDDR_REG);
-			udelay(200);
+			
+			if ((val < 0x50172) && (val > 0x5015E))
+				udelay(150);
+			else
+				udelay(250);
 	}
+}
+EXPORT_SYMBOL(pllddr_set_raw);
+
+static ssize_t pllddr_store(struct kobject *kobj, struct kobj_attribute *attr, const char *buf, size_t count)
+{
+	u32 new_val;
+	int ret;
+
+	ret = sscanf(buf, "%x", &new_val);
+		
+	if (!ret)
+		return -EINVAL;
+
+	pllddr_set_raw(new_val);
 	
 	return count;
 }
