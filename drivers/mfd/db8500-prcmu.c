@@ -1440,8 +1440,6 @@ static struct prcmu_regs_table prcmu_regs[] = {
 
 static struct liveopp_arm_table curr_table; // LiveOPP step that uses at the moment 
 
-static bool pllddr_opp_lock = false;
-
 static int db8500_prcmu_get_ddr_opp(void);
 
 static void ddr_cross_clocks_boost(bool state)
@@ -1449,9 +1447,7 @@ static void ddr_cross_clocks_boost(bool state)
 	int i, val, ddr_opp;
 	u32 old_val, new_val;
 	int new_divider, old_divider, base;
-	
-	pllddr_opp_lock = true;
-	
+
 	for (i = 0; i < ARRAY_SIZE(prcmu_regs); i++) {
 				old_val = readl(prcmu_base + prcmu_regs[i].reg);
 		
@@ -1474,7 +1470,11 @@ static void ddr_cross_clocks_boost(bool state)
 				
 				ddr_opp = readb(PRCM_DDR_SUBSYS_APE_MINBW);
 				
-				if (ddr_opp != DDR_100_OPP) new_divider *= 2;
+				if (ddr_opp != DDR_100_OPP) {
+					pr_warning("[LiveOPP] DDR_OPP != 100\n");
+					new_divider *= 2;
+				}
+					 
 				
 				new_val = base | new_divider;
 				
@@ -1489,14 +1489,11 @@ static void ddr_cross_clocks_boost(bool state)
 				}
 
 			}
-			
-	pllddr_opp_lock = false;
 }
 
 static void requirements_update_thread(struct work_struct *requirements_update_work)
 {
-	if (!pllddr_opp_lock)
-		prcmu_qos_update_requirement(PRCMU_QOS_DDR_OPP, "cpufreq",
+	prcmu_qos_update_requirement(PRCMU_QOS_DDR_OPP, "cpufreq",
 					(signed char)curr_table.ddr_opp);
 	
 	prcmu_qos_update_requirement(PRCMU_QOS_APE_OPP, "cpufreq",
@@ -1863,7 +1860,7 @@ EXPORT_SYMBOL(pllddr_get_raw);
 void pllddr_set_raw(u32 new_val, int usec)
 {
 	u32 val, old_val;
-	int old_divider, new_divider;
+	int old_divider, new_divider, ddr_opp;
 
 	old_val = readl(prcmu_base + PRCMU_PLLDDR_REG);
 	
@@ -1874,6 +1871,14 @@ void pllddr_set_raw(u32 new_val, int usec)
 	{ 
 		return;
 	}
+	
+	ddr_opp = readb(PRCM_DDR_SUBSYS_APE_MINBW);
+	
+	if (ddr_opp == DDR_100_OPP) ddr_opp = 100;
+	else if (ddr_opp == DDR_50_OPP) ddr_opp = 50;
+	else if (ddr_opp == DDR_25_OPP) ddr_opp = 25;
+	
+	pr_err("LiveOPP: %s: DDR_OPP=%d\n", __func__, ddr_opp);
 
 	for (val = old_val;
 		  (new_val > old_val) ? (val <= new_val) : (val >= new_val);

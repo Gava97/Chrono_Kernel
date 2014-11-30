@@ -107,11 +107,22 @@ static DECLARE_WORK(requirements_remove_work, requirements_remove_thread);
 
 static void pllddr_suspend_thread(struct work_struct *pllddr_suspend_work)
 {
+	u32 raw;
+  
 	if (!pllddr_lock) {
 		pllddr_lock = true;
-		pllddr_set_raw(is_suspend ? 
-			      screenoff_pllddr_raw : 
-			      screenon_pllddr_raw, 400);
+		if (is_suspend) {
+			raw = screenoff_pllddr_raw;
+			
+			prcmu_qos_update_requirement(PRCMU_QOS_DDR_OPP, "pllddr_boost", 25);
+			prcmu_set_ddr_opp(DDR_25_OPP);
+		} else {
+			raw = screenon_pllddr_raw;
+			
+			prcmu_qos_update_requirement(PRCMU_QOS_DDR_OPP, "pllddr_boost", 100);
+			prcmu_set_ddr_opp(DDR_100_OPP);
+		}
+		pllddr_set_raw(raw, 400);
 	} else 
 		return;
 	
@@ -124,7 +135,7 @@ static void pllddr_freq_update(void) {
 	if (!pllddr_limit)
 		return;
 
-	schedule_delayed_work(&pllddr_suspend_work, msecs_to_jiffies(3000)); 
+	schedule_delayed_work(&pllddr_suspend_work, msecs_to_jiffies(1000)); 
 }
 
 static void cpufreq_limits_update(bool is_suspend_) {
@@ -518,9 +529,13 @@ static int cpufreq_limits_driver_init(void)
 	
 	register_early_suspend(&driver_early_suspend);
 	
-	//when screen is on, APE_OPP 25 sometimes messes it up
 	if (prcmu_qos_add_requirement(PRCMU_QOS_APE_OPP,
 				"codina_lcd_dpi", 50)) {
+			pr_info("pcrm_qos_add APE failed\n");
+	}
+	
+	if (prcmu_qos_add_requirement(PRCMU_QOS_DDR_OPP,
+				"pllddr_boost", 25)) {
 			pr_info("pcrm_qos_add APE failed\n");
 	}
 
