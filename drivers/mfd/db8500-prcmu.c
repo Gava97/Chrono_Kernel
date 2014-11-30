@@ -5232,42 +5232,37 @@ static void  db8500_prcmu_update_freq(void *pdata)
 			last_arm_idx = i;
 		}
 
-		/* Recalibrate voltages */
-		if (liveopp_arm[i].freq_show <= 1000000) {
-			liveopp_arm[i].vbbx_raw = avs_vbb;
-		}
-
 		switch (liveopp_arm[i].freq_show) {
 			case 30000:
 			case 50000:
 			case 85000:
 			case 100000:
 			case 125000:
-				liveopp_arm[i].varm_raw = avs_varm_50  - 3;
+				liveopp_arm[i].varm_raw = avs_varm_50;
 				break;
 			case 150000:
 			case 175000:
 			case 184000:
 			case 200000:
-				liveopp_arm[i].varm_raw = avs_varm_50  - 2;
+				liveopp_arm[i].varm_raw = avs_varm_50;
 				break;
 			case 250000:
 			case 300000:
-				liveopp_arm[i].varm_raw = avs_varm_50  - 1;
+				liveopp_arm[i].varm_raw = avs_varm_50;
 				break;
 			case 350000:
 			case 400000:
-			case 450000:
 				liveopp_arm[i].varm_raw = avs_varm_50;
 				break;
+			case 450000:
 			case 500000:
-				liveopp_arm[i].varm_raw = avs_varm_50  + 4;
+				liveopp_arm[i].varm_raw = max(avs_varm_50  + 3, avs_varm_100 - 6);
 				break;
 			case 530000:
 			case 550000:
 			case 575000:
 			case 600000:
-				liveopp_arm[i].varm_raw = avs_varm_100 - 4;
+				liveopp_arm[i].varm_raw = max(avs_varm_50 + 6, avs_varm_100 - 3);
 				break;
 			case 700000:
 				liveopp_arm[i].varm_raw = avs_varm_100 - 2;
@@ -5276,7 +5271,7 @@ static void  db8500_prcmu_update_freq(void *pdata)
 				liveopp_arm[i].varm_raw = avs_varm_100;
 				break;
 			case 900000:
-				liveopp_arm[i].varm_raw = avs_varm_100 + 4;
+				liveopp_arm[i].varm_raw = avs_varm_max - 1;
 				break;
 			case 1000000:
 				liveopp_arm[i].varm_raw = avs_varm_max;
