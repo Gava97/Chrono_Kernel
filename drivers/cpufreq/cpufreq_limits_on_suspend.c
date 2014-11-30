@@ -26,41 +26,25 @@
 #include <linux/slab.h>
 #include <linux/input.h>
 #include <linux/sysfs.h>
-#include <linux/jiffies.h>
 
 #include <linux/mfd/dbx500-prcmu.h>
 
 static bool module_is_loaded = false; //FIXME: move code that uses module_is_loaded to init function
 static bool cpu_freq_limits = false;
-static bool pllddr_limit = false;
 static bool is_suspend = false;
 
-#define DEFAULT_SCRENOFF_MIN_CPUFREQ 100000
-#define DEFAULT_SCRENOFF_MAX_CPUFREQ 400000
+static unsigned int screenoff_min_cpufreq = 100000;
+static unsigned int screenoff_max_cpufreq = 400000;
 
-#define DEFAULT_INPUT_BOOST_CPUFREQ 400000
-#define DEFAULT_INPUT_BOOST_MS 40
-
-#define DEFAULT_SCRENOFF_PLLDDR_RAW 0x00050158
-#define DEFAULT_SCRENON_PLLDDR_RAW  0x00050168
-
-static u32 screenoff_pllddr_raw = DEFAULT_SCRENOFF_PLLDDR_RAW;
-static u32 screenon_pllddr_raw = DEFAULT_SCRENON_PLLDDR_RAW;
-
-static unsigned int screenoff_min_cpufreq = DEFAULT_SCRENOFF_MIN_CPUFREQ;
-static unsigned int screenoff_max_cpufreq = DEFAULT_SCRENOFF_MAX_CPUFREQ;
-
-static unsigned int screenon_min_cpufreq = 0;
+static unsigned int screenon_min_cpufreq = 0; // screenon_min_cpufreq and screenon_max_cpufreq uses system values
 static unsigned int screenon_max_cpufreq = 0;
 
-static unsigned int restore_screenon_min_cpufreq = 0;
+static unsigned int restore_screenon_min_cpufreq = 0;// these values will be gotten from system at load
 static unsigned int restore_screenon_max_cpufreq = 0; 
 
-static bool pllddr_lock = false;
-
-unsigned int input_boost_freq = DEFAULT_INPUT_BOOST_CPUFREQ;
+unsigned int input_boost_freq = 400000;
 EXPORT_SYMBOL(input_boost_freq);
-unsigned int input_boost_ms = DEFAULT_INPUT_BOOST_MS;
+unsigned int input_boost_ms = 40;
 EXPORT_SYMBOL(input_boost_ms);
 u64 last_input_time;
 EXPORT_SYMBOL(last_input_time);
@@ -105,39 +89,6 @@ static void requirements_remove_thread(struct work_struct *requirements_remove_w
 }
 static DECLARE_WORK(requirements_remove_work, requirements_remove_thread);
 
-static void pllddr_suspend_thread(struct work_struct *pllddr_suspend_work)
-{
-	u32 raw;
-  
-	if (!pllddr_lock) {
-		pllddr_lock = true;
-		if (is_suspend) {
-			raw = screenoff_pllddr_raw;
-			
-			prcmu_qos_update_requirement(PRCMU_QOS_DDR_OPP, "pllddr_boost", 25);
-			prcmu_set_ddr_opp(DDR_25_OPP);
-		} else {
-			raw = screenon_pllddr_raw;
-			
-			prcmu_qos_update_requirement(PRCMU_QOS_DDR_OPP, "pllddr_boost", 100);
-			prcmu_set_ddr_opp(DDR_100_OPP);
-		}
-		pllddr_set_raw(raw, 400);
-	} else 
-		return;
-	
-	pllddr_lock = false;
-}
-static DECLARE_DELAYED_WORK(pllddr_suspend_work, pllddr_suspend_thread);
-
-static void pllddr_freq_update(void) {
-	
-	if (!pllddr_limit)
-		return;
-
-	schedule_delayed_work(&pllddr_suspend_work, msecs_to_jiffies(1000)); 
-}
-
 static void cpufreq_limits_update(bool is_suspend_) {
 	int new_min, new_max;
 	
@@ -153,12 +104,10 @@ static void cpufreq_limits_update(bool is_suspend_) {
 
 		new_min = is_suspend_ ? screenoff_min_cpufreq : screenon_min_cpufreq;
 		new_max = is_suspend_ ? screenoff_max_cpufreq : screenon_max_cpufreq;
-		
 		if (new_min)
 			policy->min = new_min;
 		else 
 			pr_err("[cpufreq] new_min == 0\n");
-		
 		if (new_max)
 			policy->max = new_max;
 		else
@@ -190,13 +139,11 @@ static void late_resume_fn(struct early_suspend *handler)
 static void early_suspend_work_fn(struct work_struct *work)
 {
 	cpufreq_limits_update(true);
-	pllddr_freq_update();
 }
 
 static void late_resume_work_fn(struct work_struct *work)
 {
 	cpufreq_limits_update(false);
-	pllddr_freq_update();
 }
 
 static struct early_suspend driver_early_suspend = {
@@ -281,54 +228,6 @@ static ssize_t cpufreq_limits_show(struct kobject *kobj, struct kobj_attribute *
 	return strlen(buf);
 }
 
-static ssize_t pllddr_raw_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf) 
-{
-	sprintf(buf, "Status: %s\n"
-		     "on suspend: %#010x\n"
-		     "on resume: %#010x",
-		pllddr_limit ? "on" : "off",
-		screenoff_pllddr_raw,
-		screenon_pllddr_raw);
-	
-	return strlen(buf);
-}
-
-static ssize_t pllddr_raw_store(struct kobject *kobj, struct kobj_attribute *attr, const char *buf, size_t count)
-{
-  
-	if (!strncmp(buf, "on", 2)) {
-		pllddr_limit = true;
-		return count;
-	}
-
-	if (!strncmp(buf, "off", 3)) {
-		pllddr_limit = false;
-		return count;
-	}
-	
-		
-	if (!strncmp(&buf[0], "suspend=", 8)) {
-		if (!sscanf(&buf[8], "%x", &screenoff_pllddr_raw))
-			goto invalid_input;
-	}
-
-	if (!strncmp(&buf[0], "resume=", 7)) {
-		if (!sscanf(&buf[7], "%x", &screenon_pllddr_raw))
-			goto invalid_input;
-	}
-		
-	return count;
-	
-invalid_input:
-	pr_err("[cpufreq_limits] invalid input\n");
-	return -EINVAL;
-}
-
-static struct kobj_attribute pllddr_raw_interface = __ATTR(pllddr_raw, 0644,
-									 pllddr_raw_show,
-									 pllddr_raw_store);
-
-
 static ssize_t cpufreq_input_boost_freq_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf) 
 {
 	sprintf(buf, "%d", input_boost_freq);
@@ -343,7 +242,7 @@ static ssize_t cpufreq_input_boost_freq_store(struct kobject *kobj, struct kobj_
 
 	if (!ret)
 		return -EINVAL;
-
+	
 	return count;
 }
 
@@ -408,7 +307,7 @@ static ssize_t cpufreq_limits_store(struct kobject *kobj, struct kobj_attribute 
 	return count;
 
 invalid_input:
-	pr_err("[cpufreq_limits] invalid input\n");
+	pr_err("[cpufreq_limits] invalid input");
 	return -EINVAL;
 }
 
@@ -420,7 +319,6 @@ static struct attribute *cpufreq_attrs[] = {
 	&cpufreq_limits_interface.attr,
 	&cpufreq_input_boost_freq_interface.attr,
 	&cpufreq_input_boost_ms_interface.attr,
-	&pllddr_raw_interface.attr,
 	NULL,
 };
 
@@ -529,13 +427,9 @@ static int cpufreq_limits_driver_init(void)
 	
 	register_early_suspend(&driver_early_suspend);
 	
+	//when screen is on, APE_OPP 25 sometimes messes it up
 	if (prcmu_qos_add_requirement(PRCMU_QOS_APE_OPP,
 				"codina_lcd_dpi", 50)) {
-			pr_info("pcrm_qos_add APE failed\n");
-	}
-	
-	if (prcmu_qos_add_requirement(PRCMU_QOS_DDR_OPP,
-				"pllddr_boost", 25)) {
 			pr_info("pcrm_qos_add APE failed\n");
 	}
 
