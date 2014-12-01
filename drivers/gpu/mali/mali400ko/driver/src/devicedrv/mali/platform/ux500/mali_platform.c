@@ -241,6 +241,10 @@ static void mali_boost_init(void)
 	pr_info("[Mali] Booster: %u kHz - %u kHz\n", 
 			mali_dvfs[boost_low].freq, 
 			mali_dvfs[boost_high].freq);
+	
+	for (i = 0; i<ARRAY_SIZE(boost_stat); i++) {
+		boost_stat[i] = 0;
+	}
 			
 	boost_cur = boost_low;
 }
