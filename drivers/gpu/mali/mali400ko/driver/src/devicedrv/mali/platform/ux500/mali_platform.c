@@ -37,8 +37,8 @@
 #include <linux/mfd/dbx500-prcmu.h>
 #endif
 
-#define MALI_HIGH_TO_LOW_LEVEL_UTILIZATION_LIMIT 16
-#define MALI_LOW_TO_HIGH_LEVEL_UTILIZATION_LIMIT 64
+#define MALI_HIGH_TO_LOW_LEVEL_UTILIZATION_LIMIT 48
+#define MALI_LOW_TO_HIGH_LEVEL_UTILIZATION_LIMIT 96
 
 #define MALI_UX500_VERSION		"1.1.3"
 
@@ -67,9 +67,8 @@ struct mali_dvfs_data
 };
 
 static struct mali_dvfs_data mali_dvfs[] = {
-	{138240, 0x01050124, 0x1D},
-	{192000, 0x01050132, 0x20},
-	{253440, 0x01050142, 0x20},
+	{192000, 0x01050132, 0x26},
+	{253440, 0x01050142, 0x26},
 	{299520, 0x0105014E, 0x26},
 	{318720, 0x01050153, 0x26},
 	{360000, 0x0105015E, 0x26},
@@ -116,7 +115,7 @@ static u32 boost_low 		= 0;
 static u32 boost_high 		= 0;
 static u32 boost_cur		= 0;
 
-static u32 boost_stat[15];
+static u32 boost_stat[24];
 static u32 boost_stat_opp50	= 0;
 static u32 boost_stat_total	= 0;
 
@@ -345,7 +344,9 @@ void mali_utilization_function(struct work_struct *ptr)
 			prcmu_set_ape_opp(APE_100_OPP);
 			has_requested_low = 0;
 		} else {
-			mali_freq_up(); // increase frequency
+			if (!mali_freq_up()) // increase frequency
+				prcmu_qos_update_requirement(PRCMU_QOS_ARM_KHZ, "mali", 
+							     PRCMU_QOS_MAX_VALUE);
 		}
 	} else {
 		if (mali_last_utilization < mali_utilization_high_to_low) {
@@ -354,6 +355,7 @@ void mali_utilization_function(struct work_struct *ptr)
 					MALI_DEBUG_PRINT(5, ("MALI GPU utilization: %u SIGNAL_LOW\n", mali_last_utilization));
 					prcmu_qos_update_requirement(PRCMU_QOS_DDR_OPP, "mali", PRCMU_QOS_DEFAULT_VALUE);
 					prcmu_qos_update_requirement(PRCMU_QOS_APE_OPP, "mali", PRCMU_QOS_DEFAULT_VALUE);
+					prcmu_qos_update_requirement(PRCMU_QOS_ARM_KHZ, "mali", PRCMU_QOS_DEFAULT_VALUE);
 					prcmu_set_ape_opp(APE_50_OPP);
 					has_requested_low = 1;
 				} 
@@ -736,6 +738,7 @@ _mali_osk_errcode_t mali_platform_init()
 
 		prcmu_qos_add_requirement(PRCMU_QOS_APE_OPP, "mali", PRCMU_QOS_DEFAULT_VALUE);
 		prcmu_qos_add_requirement(PRCMU_QOS_DDR_OPP, "mali", PRCMU_QOS_DEFAULT_VALUE);
+		prcmu_qos_add_requirement(PRCMU_QOS_ARM_KHZ, "mali", PRCMU_QOS_DEFAULT_VALUE);
 
 		pr_info("[Mali] DB8500 GPU OC Initialized (%s)\n", MALI_UX500_VERSION);
 
