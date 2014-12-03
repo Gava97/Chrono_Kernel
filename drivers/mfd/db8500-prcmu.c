@@ -1970,6 +1970,34 @@ invalid_input:
 }
 ATTR_RW(pllddr_cross_clocks);
 
+static ssize_t regu_ctrl2_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
+{
+	u8 reg, val;
+	
+	for (reg = 0; reg < 0xff; reg++) {
+		prcmu_abb_read(AB8500_REGU_CTRL2, reg, &val, 1);
+		sprintf(buf, "%sREG[%#04x] = %x\n", buf, reg, (int)val);
+	}
+	
+	return strlen(buf);
+}
+
+static ssize_t regu_ctrl2_store(struct kobject *kobj, struct kobj_attribute *attr, const char *buf, size_t count)
+{
+	int ret, reg, val;
+	
+	u8 u8_val; //FIXME: how to get rid of using this variable without compiling warnings?
+	
+	ret = sscanf(&buf[0], "%04x%04x", &reg, &val);
+	
+	u8_val = (u8) val;
+	
+	prcmu_abb_write(AB8500_REGU_CTRL2, (u8)reg, &u8_val, 1);
+	
+	return ret;
+}
+ATTR_RW(regu_ctrl2);
+
 static struct attribute *liveopp_attrs[] = {
 #if CONFIG_LIVEOPP_DEBUG > 1
 	&liveopp_start_interface.attr, 
@@ -2012,6 +2040,7 @@ static struct attribute *liveopp_attrs[] = {
 	&arm_step28_interface.attr,
 	&pllddr_interface.attr, 
 	&pllddr_cross_clocks_interface.attr,
+	&regu_ctrl2_interface.attr,
 	NULL,
 };
 
