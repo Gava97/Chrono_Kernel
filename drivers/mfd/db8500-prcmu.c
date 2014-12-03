@@ -1098,7 +1098,7 @@ static void db8500_prcmu_get_abb_event_buffer(void __iomem **buf)
 #ifdef CONFIG_DB8500_LIVEOPP
 #include <linux/kobject.h>
 
-#define LIVEOPP_VER		"2.2"
+#define LIVEOPP_VER		"3.0.1 beta"
 
 #define PRCMU_ARMFIX_REG		0x0000
 #define PRCMU_ACLK_REG			0x0004
@@ -1152,8 +1152,8 @@ struct liveopp_arm_table
 	u32 	pllarm_raw;
 	u8 	varm_raw;
 	u8  	vbbx_raw;
-	int	ddr_opp;
-	int	ape_opp;
+	s8	ddr_opp;
+	s8	ape_opp;
 };
 
 /* 
@@ -1200,26 +1200,22 @@ static int liveopp_start = 0;
 #endif
 
 #ifdef CONFIG_MACH_SEC_GOLDEN 
-/* table for i8190 */
-/* defaults bases on my avs values */
 static struct liveopp_arm_table liveopp_arm[] = {
 //	| CLK            | PLL       | VDD | VBB | DDR | APE |
-//	{  50000,   46080, 0x00050106, 0x16, 0xDB,  25,  25},
-//	{ 100000,   99840, 0x0005010D, 0x17, 0xDB,  25,  25},
-	{ 200000,  199680, 0x0005011A, 0x4C, 0xBD,  25,  25}, // VARM_RET
-	{ 300000,  299520, 0x00050127, 0x4C, 0xBD,  25,  25},
-	{ 400000,  399360, 0x00050134, 0x4C, 0xBD,  25,  50}, // VARM_50
-	{ 500000,  499200, 0x00050141, 0x4C, 0xBD,  25,  50},
-	{ 600000,  599040, 0x0005014E, 0x4C, 0xBD,  50,  50},
-	{ 700000,  698880, 0x0005015B, 0x4C, 0xBD,  50,  50},
-	{ 800000,  798720, 0x00050168, 0x5A, 0xBD, 100,  50}, // VARM_100
-	{ 900000,  898560, 0x00050175, 0x5A, 0xBD, 100,  50},
-	{1000000,  998400, 0x00050182, 0x5A, 0xBD, 100, 100}, 
-	{1100000, 1098240, 0x0005018F, 0xF8, 0xCD, 100, 100}, // VARM_MAX
-	{1200000, 1198080, 0x0005019C, 0xF8, 0xFF, 100, 100},
+	{ 100000,   99840, 0x0005010D, 0x20, 0xdd,  25,  25},
+	{ 200000,  199680, 0x0005011A, 0x20, 0xdd,  25,  25},
+	{ 300000,  299520, 0x00050127, 0x20, 0xdd,  25,  25},
+	{ 400000,  399360, 0x00050134, 0x30, 0xdd,  25,  50},
+	{ 500000,  499200, 0x00050141, 0x30, 0xdd,  25,  50},
+	{ 600000,  599040, 0x0005014E, 0x40, 0xdd,  50,  50},
+	{ 700000,  698880, 0x0005015B, 0x40, 0xdd,  50,  50},
+	{ 800000,  798720, 0x00050168, 0x50, 0xdd, 100,  50},
+	{ 900000,  898560, 0x00050175, 0x50, 0xdd, 100,  50},
+	{1000000,  998400, 0x00050182, 0x60, 0xdd, 100, 100},
+	{1100000, 1098240, 0x0005018F, 0x60, 0xdd, 100, 100},
+	{1200000, 1198080, 0x0005019C, 0x60, 0xdd, 100, 100},
 };
 #else
-/* table for others */
 static struct liveopp_arm_table liveopp_arm[] = {
 //	| CLK            | PLL       | VDD | VBB | DDR | APE |
 	{  30000,   30720, 0x00050104, 0x16, 0xDB,  25,  25},
@@ -1250,7 +1246,7 @@ static struct liveopp_arm_table liveopp_arm[] = {
 	{1150000, 1152000, 0x00050196, 0x36, 0x8F, 100, 100},
 	{1200000, 1198080, 0x0005019C, 0x37, 0x8F, 100, 100},
 	{1230000, 1228800, 0x000501A0, 0x38, 0x8F, 100, 100},
-	{1245000, 1244160, 0x000501A2, 0x38, 0x8F, 100, 100},
+//	{1245000, 1244160, 0x000501A2, 0x38, 0x8F, 100, 100},
 };
 #endif
 
@@ -1283,21 +1279,7 @@ static int varm_uv(u8 raw)
 		return AB8500_VARM_MAX_UV;
 	}
 }
-#endif
-#ifdef AB8505
-static int varm_uv(u8 raw)
-{
-	raw &= AB8505_VARM_VSEL_MASK;
 
-	if (raw <= 0x7f) {
-		return (AB8505_VARM_MIN_UV + (raw * AB8505_VARM_STEP_UV));
-	} else {
-		return AB8505_VARM_MAX_UV;
-	}
-}
-#endif
-
-#ifdef AB8500
 static int vbbp_uv(u8 raw)
 {
 	int ret;
@@ -1314,7 +1296,7 @@ static int vbbp_uv(u8 raw)
 			ret = -400000;
 			break;
 		case 0xc0 ... 0xf0:
-			ret = -400000 + ((raw >> 4) - 0x0c) * 100000; 
+			ret = -400000 + ((raw >> 4) - 0x0c) * AB8500_VBB_STEP_UV; 
 			break;
 		default:
 			ret = 0;
@@ -1349,20 +1331,90 @@ static int vbbn_uv(u8 raw)
 
 	return ret;
 }
-#endif
+
+static u8 uv_to_vbbp(int uv)
+{
+	u8 ret;
+	
+	if (uv > 400000)
+		uv = 400000;
+	else if (uv < -400000)
+		uv = -400000;
+
+	switch (uv) {
+		case 0:
+		case 100000:
+		case 200000:
+		case 300000:
+		case 400000:
+			// FIXME: +400000 uV equals to 0x40 .. 0x70, but we return just 0x40 
+			ret = (uv / AB8500_VBB_STEP_UV) << 4;
+			break;
+		case -100000:
+		case -200000:
+		case -300000:
+		case -400000:
+			// 0x80 .. 0xb0 also are equals to -400000 mV
+			ret = 0x100 + ((uv / AB8500_VBB_STEP_UV) << 4);
+			break;
+		default:
+			ret = 0;
+			break;
+	}
+
+	return ret;
+}
+
+static u8 uv_to_vbbn(int uv)
+{
+	u8 ret;
+	
+	if (uv > 400000)
+		uv = 400000;
+	else if (uv < -400000)
+		uv = -400000;
+
+	switch (uv) {
+		case 0:
+		case -100000:
+		case -200000:
+		case -300000:
+		case -400000:
+			ret = - uv / AB8500_VBB_STEP_UV;
+			break;
+		case 100000:
+		case 200000:
+		case 300000:
+		case 400000:
+			ret = 0x08 + (uv / AB8500_VBB_STEP_UV);
+			break;
+		default:
+			ret = 0;
+			break;
+	}
+
+	return ret;
+}
+#endif /* AB8500 */
+
 #ifdef AB8505
+static int varm_uv(u8 raw)
+{
+	return (AB8505_VARM_MIN_UV + ((raw & AB8505_VARM_VSEL_MASK) * AB8505_VARM_STEP_UV));
+}
+
 static int vbbp_uv(u8 raw)
 {
 	int ret;
 	raw &= AB8505_VBBP_VSEL_MASK;
-	raw >>= 4; /* shift 4 bits right */
+	raw >>= 4; // Shift 4 right to have same coding like Vbbn
 
 	switch (raw) {
 		case 0x00 ... 0x07:
 			ret = -AB8505_VBB_STEP_UV * raw;
 			break;
 		case 0x08 ... 0x0f:
-			ret = 50000 + (raw - 0x08) * AB8505_VBB_STEP_UV; 
+			ret = 50000 + (raw - 0x08) * AB8505_VBB_STEP_UV;
 			break;
 		default:
 			ret = 0;
@@ -1382,7 +1434,7 @@ static int vbbn_uv(u8 raw)
 			ret = -AB8505_VBB_STEP_UV * raw;
 			break;
 		case 0x08 ... 0x0f:
-			ret = 50000 + (raw - 0x08) * AB8505_VBB_STEP_UV; 
+			ret = 50000 + (raw - 0x08) * AB8505_VBB_STEP_UV;
 			break;
 		default:
 			ret = 0;
@@ -1391,7 +1443,7 @@ static int vbbn_uv(u8 raw)
 
 	return ret;
 }
-#endif
+#endif /* AB8505 */
 
 static int pllarm_freq(u32 raw)
 {
@@ -1569,7 +1621,7 @@ out:
 
 static ssize_t version_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
 {
-	sprintf(buf, "LiveOPP (%s), cocafe\n", LIVEOPP_VER);
+	sprintf(buf, "LiveOPP (%s), cocafe, mkaluza, 1n4148, ChronoMonochrome\n", LIVEOPP_VER);
 
 	return strlen(buf);
 }
@@ -1699,9 +1751,13 @@ static ssize_t arm_step_show(struct kobject *kobj, struct kobj_attribute *attr, 
 	sprintf(buf, "%sFrequency show:\t\t%d kHz\n", buf, liveopp_arm[_index].freq_show);
 	sprintf(buf, "%sFrequency real:\t\t%d kHz\n", buf, pllarm_freq(liveopp_arm[_index].pllarm_raw));
 	sprintf(buf, "%sArmPLL:\t\t\t%#010x\n", buf, liveopp_arm[_index].pllarm_raw);
-	sprintf(buf, "%sVarm:\t\t\t%d uV (%#04x)\n", buf, varm_uv(liveopp_arm[_index].varm_raw),
-								     (int)liveopp_arm[_index].varm_raw);
-	sprintf(buf, "%sVbbx:\t\t\t%#04x\n", buf, (int)liveopp_arm[_index].vbbx_raw);
+	sprintf(buf, "%sVarm:\t\t\t%d uV (%#04x)\n", buf, 
+	                                             varm_uv(liveopp_arm[_index].varm_raw),
+						     (int)liveopp_arm[_index].varm_raw);
+	sprintf(buf, "%sVbbx:\t\t\t%d/%d uV (%#04x)\n", buf,
+	                                             vbbp_uv(liveopp_arm[_index].vbbx_raw),
+	                                             vbbn_uv(liveopp_arm[_index].vbbx_raw),
+                                                     (int)liveopp_arm[_index].vbbx_raw);
 	sprintf(buf, "%sDDR_OPP:\t\t\t%d\n", buf, liveopp_arm[_index].ddr_opp);
 	sprintf(buf, "%sAPE_OPP:\t\t\t%d\n", buf, liveopp_arm[_index].ape_opp);
 
@@ -1777,8 +1833,7 @@ static ssize_t arm_step_store(struct kobject *kobj, struct kobj_attribute *attr,
 	if (!strncmp(buf, "ddropp=", 7)) {
 		ret = sscanf(&buf[7], "%d", &val);
 		if ((!ret) || (val != 25 && val != 50 && val != 100 && val != -1 && val != -2)) {
-			pr_err("[LiveOPP] Invalid QOS_DDR_OPP value."
-			"Enter 25, 50, 100 or 125\n");
+			pr_err("[LiveOPP] Invalid QOS_DDR_OPP value. Enter 25, 50 or 100\n");
 			return -EINVAL;
 		}
 
@@ -1869,18 +1924,14 @@ static ssize_t pllddr_store(struct kobject *kobj, struct kobj_attribute *attr, c
 	new_divider = (new_val & 0x00FF0000) >> 16;
 	
 	if (new_divider != old_divider)
-	{ 
-		/* changing divider is unstable */
+	{
 		return -EINVAL;
 	}
 
-       /*
-	* I don't know why, but if we immediately set new value to PRCMU_PLLDDR_REG,
-	* it'll cause reboot. Only following way works properly.
-	*/
+
 	for (val = old_val;
-	     (new_val > old_val) ? (val <= new_val) : (val >= new_val); 
-	     (new_val > old_val) ? val++ : val--) {
+	(new_val > old_val) ? (val <= new_val) : (val >= new_val); 
+	(new_val > old_val) ? val++ : val--) {
 			writel_relaxed(val, prcmu_base + PRCMU_PLLDDR_REG);
 			udelay(200);
 	}
@@ -2037,7 +2088,7 @@ static struct attribute *liveopp_attrs[] = {
 	&arm_step25_interface.attr,
 	&arm_step26_interface.attr, 
 	&arm_step27_interface.attr, 
-	&arm_step28_interface.attr,
+	&arm_step28_interface.attr,	
 	&pllddr_interface.attr, 
 	&pllddr_cross_clocks_interface.attr,
 	&regu_ctrl2_interface.attr,
@@ -3701,7 +3752,7 @@ static int db8500_prcmu_abb_read_no_irq(u8 slave, u8 reg, u8 *value, u8 size)
 }
 
 /* Only to be used before restart! */
-static int db8500_prcmu_abb_write_no_irq(u8 slave, u8 reg, u8 *value, u8 size)
+/*static int db8500_prcmu_abb_write_no_irq(u8 slave, u8 reg, u8 *value, u8 size)
 {
 	int r;
 	int count = 0;
@@ -3748,7 +3799,7 @@ static int db8500_prcmu_abb_write_no_irq(u8 slave, u8 reg, u8 *value, u8 size)
 	r = ((mb5_transfer.ack.status == I2C_WR_OK) ? 0 : -EIO);
 
 	return r;
-}
+}*/
 
 /**
  * db8500_prcmu_abb_write_masked() - Write masked register value(s) to the ABB.
@@ -4167,12 +4218,11 @@ static bool db8500_prcmu_is_ac_wake_requested(void)
 
 static void db8500_prcmu_system_reset(u16 reset_code)
 {
-	u8 power_cut_reset = 0;
+	//u8 power_cut_reset = 0;
 	trace_u8500_system_reset(reset_code);
 
 	/* Disable power-cut feature */
-	(void)db8500_prcmu_abb_write_no_irq(AB8500_RTC, PCUT_CTR_AND_STATUS,
-						&power_cut_reset, 1);
+//	(void)db8500_prcmu_abb_write_no_irq(AB8500_RTC, PCUT_CTR_AND_STATUS, &power_cut_reset, 1);
 
 	writew_relaxed(reset_code, (tcdm_base + PRCM_SW_RST_REASON));
 #ifdef CONFIG_SAMSUNG_LOG_BUF
@@ -5230,10 +5280,18 @@ static void  db8500_prcmu_update_freq(void *pdata)
 {
 	#ifdef CONFIG_DB8500_LIVEOPP
 	int i;
-	u8  avs_vbb = readb(tcdm_base + PRCM_AVS_VBB_MAX_OPP);
+	u8  avs_vbb_max  = readb(tcdm_base + PRCM_AVS_VBB_MAX_OPP);
+	u8  avs_vbb_100  = readb(tcdm_base + PRCM_AVS_VBB_100_OPP);
+	u8  avs_vbb_50   = readb(tcdm_base + PRCM_AVS_VBB_50_OPP);
+	u8  avs_vbb_ret  = readb(tcdm_base + PRCM_AVS_VBB_RET);
 	u8  avs_varm_max = readb(tcdm_base + PRCM_AVS_VARM_MAX_OPP);
+	//u8  avs_varm_oc = avs_varm_max + avs_varm_ret;
 	u8  avs_varm_100 = readb(tcdm_base + PRCM_AVS_VARM_100_OPP);
 	u8  avs_varm_50  = readb(tcdm_base + PRCM_AVS_VARM_50_OPP);
+	u8  avs_varm_ret = readb(tcdm_base + PRCM_AVS_VARM_RET);
+	u8  avs_varm_25  = (avs_varm_50 + avs_varm_ret) / 2; 
+        u8 avs_vbb_oc, avs_vbb_oc2, avs_vbb_25;
+
 	u32 pllclk = pllarm_freq(db8500_prcmu_readl(PRCMU_PLLARM_REG));
 	#endif /* CONFIG_DB8500_LIVEOPP */
 
@@ -5242,12 +5300,30 @@ static void  db8500_prcmu_update_freq(void *pdata)
 
 	#ifdef CONFIG_DB8500_LIVEOPP
 	pr_info("[LiveOPP] Total steps [%d]\n", ARRAY_SIZE(liveopp_arm));
-	pr_info("[LiveOPP] Vbb [%#04x] Varm [%#04x %#04x %#04x]\n",
-					avs_vbb,
+	pr_info("[LiveOPP] Vbb [%#04x %#04x %#04x %#04x]\n",
+					avs_vbb_max,
+					avs_vbb_100,
+					avs_vbb_50,
+					avs_vbb_ret);
+	pr_info("[LiveOPP] Varm [%#04x %#04x %#04x %#04x]\n",
 					avs_varm_max,
 					avs_varm_100,
-					avs_varm_50);
+					avs_varm_50,
+					avs_varm_ret);
 
+	// experimental vbb_max re-calculation       
+        // Calculation for AB8500 regulator only 
+        // VBB for oc is +100mV on top of VBB_MAX        
+        avs_vbb_oc = uv_to_vbbn(vbbn_uv(avs_vbb_max & AB8500_VBBN_VSEL_MASK) + 100000) |
+		     uv_to_vbbp(vbbp_uv(avs_vbb_max & AB8500_VBBP_VSEL_MASK) - 100000);
+		     
+	avs_vbb_oc2 = uv_to_vbbn(vbbn_uv(avs_vbb_max & AB8500_VBBN_VSEL_MASK) + 200000) |
+		     uv_to_vbbp(vbbp_uv(avs_vbb_max & AB8500_VBBP_VSEL_MASK) - 200000);
+
+        // VBB for uv is -100mV from VBB_50
+        avs_vbb_25 = uv_to_vbbn(vbbn_uv(avs_vbb_50 & AB8500_VBBN_VSEL_MASK) - 100000) |
+		     uv_to_vbbp(vbbp_uv(avs_vbb_50 & AB8500_VBBP_VSEL_MASK) + 100000);
+        
 	for (i = 0; i < ARRAY_SIZE(liveopp_arm); i++) {
 		/* Update frequencies */
 		freq_table[i].frequency = liveopp_arm[i].freq_show;
@@ -5260,57 +5336,70 @@ static void  db8500_prcmu_update_freq(void *pdata)
 						pllclk);
 			last_arm_idx = i;
 		}
-
+		
 		switch (liveopp_arm[i].freq_show) {
 			case 30000:
 			case 50000:
 			case 85000:
 			case 100000:
 			case 125000:
-				liveopp_arm[i].varm_raw = avs_varm_50;
-				break;
 			case 150000:
 			case 175000:
 			case 184000:
-			case 200000:
-				liveopp_arm[i].varm_raw = avs_varm_50;
+				liveopp_arm[i].varm_raw = avs_varm_25;
+				liveopp_arm[i].vbbx_raw = avs_vbb_25;
 				break;
+			case 200000:
 			case 250000:
 			case 275000:
 			case 300000:
 				liveopp_arm[i].varm_raw = avs_varm_50;
+				liveopp_arm[i].vbbx_raw = avs_vbb_50;
 				break;
 			case 350000:
 			case 400000:
 				liveopp_arm[i].varm_raw = avs_varm_50;
+				liveopp_arm[i].vbbx_raw = avs_vbb_50;
 				break;
 			case 450000:
 			case 500000:
 				liveopp_arm[i].varm_raw = max(avs_varm_50  + 3, avs_varm_100 - 6);
+				liveopp_arm[i].vbbx_raw = avs_vbb_50;
 				break;
 			case 530000:
 			case 550000:
 			case 575000:
 			case 600000:
 				liveopp_arm[i].varm_raw = max(avs_varm_50 + 6, avs_varm_100 - 3);
+				liveopp_arm[i].vbbx_raw = avs_vbb_50;
 				break;
 			case 700000:
 				liveopp_arm[i].varm_raw = avs_varm_100 - 2;
+				liveopp_arm[i].vbbx_raw = avs_vbb_100;
 				break;
 			case 800000:
 				liveopp_arm[i].varm_raw = avs_varm_100;
+				liveopp_arm[i].vbbx_raw = avs_vbb_100;
 				break;
 			case 900000:
 				liveopp_arm[i].varm_raw = avs_varm_max - 1;
+				liveopp_arm[i].vbbx_raw = avs_vbb_oc;
 				break;
 			case 1000000:
 				liveopp_arm[i].varm_raw = avs_varm_max;
+				liveopp_arm[i].vbbx_raw = avs_vbb_oc;
+				break;
+			case 1100000:
+			case 1150000:
+			case 1200000:
+			case 1230000:
+			case 1245000:
+				liveopp_arm[i].vbbx_raw = avs_vbb_oc2;
 				break;
 			default:
 				break;
 		}
 	}
-
 	#else /* CONFIG_DB8500_LIVEOPP */
 	if  (!db8500_prcmu_has_arm_maxopp())
 		return;
@@ -5390,4 +5479,3 @@ arch_initcall(db8500_prcmu_init);
 MODULE_AUTHOR("Mattias Nilsson <mattias.i.nilsson@stericsson.com>");
 MODULE_DESCRIPTION("DB8500 PRCM Unit driver");
 MODULE_LICENSE("GPL v2");
-
