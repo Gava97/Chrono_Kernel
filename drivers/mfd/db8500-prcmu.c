@@ -1218,13 +1218,7 @@ static struct liveopp_arm_table liveopp_arm[] = {
 #else
 static struct liveopp_arm_table liveopp_arm[] = {
 //	| CLK            | PLL       | VDD | VBB | DDR | APE |
-	{  30000,   30720, 0x00050104, 0x16, 0xDB,  25,  25},
-	{  50000,   46080, 0x00050106, 0x16, 0xDB,  25,  25},
-	{  85000,   84480, 0x0005010B, 0x17, 0xDB,  25,  25},
-	{ 100000,   99840, 0x0005010D, 0x17, 0xDB,  25,  25},
-	{ 125000,  122880, 0x00050110, 0x17, 0xDB,  25,  25},
-	{ 150000,  153600, 0x00050114, 0x17, 0xDB,  25,  25},
-	{ 175000,  176640, 0x00050117, 0x17, 0xDB,  25,  25},
+	{ 150000,  153600, 0x00050114, 0x18, 0xDB,  25,  25},
 	{ 184000,  184320, 0x00050118, 0x18, 0xDB,  25,  25},
 	{ 200000,  199680, 0x0005011A, 0x18, 0xDB,  25,  50},
 	{ 250000,  253440, 0x00050121, 0x18, 0xDB,  25,  50},
@@ -1246,7 +1240,7 @@ static struct liveopp_arm_table liveopp_arm[] = {
 	{1150000, 1152000, 0x00050196, 0x36, 0x8F, 100, 100},
 	{1200000, 1198080, 0x0005019C, 0x37, 0x8F, 100, 100},
 	{1230000, 1228800, 0x000501A0, 0x38, 0x8F, 100, 100},
-//	{1245000, 1244160, 0x000501A2, 0x38, 0x8F, 100, 100},
+	{1245000, 1244160, 0x000501A2, 0x38, 0x8F, 100, 100},
 };
 #endif
 
@@ -5321,8 +5315,8 @@ static void  db8500_prcmu_update_freq(void *pdata)
 		     uv_to_vbbp(vbbp_uv(avs_vbb_max & AB8500_VBBP_VSEL_MASK) - 200000);
 
         // VBB for uv is -100mV from VBB_50
-        avs_vbb_25 = uv_to_vbbn(vbbn_uv(avs_vbb_50 & AB8500_VBBN_VSEL_MASK) - 100000) |
-		     uv_to_vbbp(vbbp_uv(avs_vbb_50 & AB8500_VBBP_VSEL_MASK) + 100000);
+        /*avs_vbb_25 = uv_to_vbbn(vbbn_uv(avs_vbb_50 & AB8500_VBBN_VSEL_MASK) - 100000) |
+		     uv_to_vbbp(vbbp_uv(avs_vbb_50 & AB8500_VBBP_VSEL_MASK) + 100000);*/
         
 	for (i = 0; i < ARRAY_SIZE(liveopp_arm); i++) {
 		/* Update frequencies */
@@ -5338,24 +5332,11 @@ static void  db8500_prcmu_update_freq(void *pdata)
 		}
 		
 		switch (liveopp_arm[i].freq_show) {
-			case 30000:
-			case 50000:
-			case 85000:
-			case 100000:
-			case 125000:
 			case 150000:
-			case 175000:
-			case 184000:
-				liveopp_arm[i].varm_raw = avs_varm_25;
-				liveopp_arm[i].vbbx_raw = avs_vbb_25;
-				break;
 			case 200000:
 			case 250000:
 			case 275000:
 			case 300000:
-				liveopp_arm[i].varm_raw = avs_varm_50;
-				liveopp_arm[i].vbbx_raw = avs_vbb_50;
-				break;
 			case 350000:
 			case 400000:
 				liveopp_arm[i].varm_raw = avs_varm_50;
@@ -5363,28 +5344,22 @@ static void  db8500_prcmu_update_freq(void *pdata)
 				break;
 			case 450000:
 			case 500000:
-				liveopp_arm[i].varm_raw = max(avs_varm_50  + 3, avs_varm_100 - 6);
+				liveopp_arm[i].varm_raw = max(avs_varm_50  + 6, avs_varm_100 - 6);
 				liveopp_arm[i].vbbx_raw = avs_vbb_50;
 				break;
 			case 530000:
 			case 550000:
 			case 575000:
 			case 600000:
-				liveopp_arm[i].varm_raw = max(avs_varm_50 + 6, avs_varm_100 - 3);
+				liveopp_arm[i].varm_raw = max(avs_varm_50 + 6, avs_varm_100 - 6);
 				liveopp_arm[i].vbbx_raw = avs_vbb_50;
 				break;
 			case 700000:
-				liveopp_arm[i].varm_raw = avs_varm_100 - 2;
-				liveopp_arm[i].vbbx_raw = avs_vbb_100;
-				break;
 			case 800000:
 				liveopp_arm[i].varm_raw = avs_varm_100;
 				liveopp_arm[i].vbbx_raw = avs_vbb_100;
 				break;
 			case 900000:
-				liveopp_arm[i].varm_raw = avs_varm_max - 1;
-				liveopp_arm[i].vbbx_raw = avs_vbb_oc;
-				break;
 			case 1000000:
 				liveopp_arm[i].varm_raw = avs_varm_max;
 				liveopp_arm[i].vbbx_raw = avs_vbb_oc;
