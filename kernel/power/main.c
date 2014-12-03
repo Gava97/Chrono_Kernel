@@ -503,8 +503,10 @@ static ssize_t cpufreq_max_limit_store(struct kobject *kobj,
 
 			/* Update PRCMU QOS value to min value */
 			if(min_replacement && cpufreq_min_limit_val != -1) {
+#if 0
 				prcmu_qos_update_requirement(PRCMU_QOS_ARM_KHZ,
 						"power", cpufreq_min_limit_val);
+#endif
 				/* Clear replacement flag */
 				min_replacement = 0;
 			}
@@ -525,8 +527,10 @@ static ssize_t cpufreq_max_limit_store(struct kobject *kobj,
 					__func__, cpufreq_max_limit_val);
 				}
 				/* Update PRCMU QOS value to max value */
+#if 0
 				prcmu_qos_update_requirement(PRCMU_QOS_ARM_KHZ,
 						"power", cpufreq_max_limit_val);
+#endif
 				/* Set replacement flag */
 				min_replacement = 1;
 			}
@@ -571,8 +575,10 @@ static ssize_t cpufreq_min_limit_store(struct kobject *kobj,
  			cpufreq_min_limit_val = -1;
 
 			/* Update PRCMU QOS value to default */
+#if 0
 			prcmu_qos_update_requirement(PRCMU_QOS_ARM_KHZ,
 					"power", PRCMU_QOS_DEFAULT_VALUE);
+#endif
 
 			/* Clear replacement flag */
 			min_replacement = 0;
@@ -593,14 +599,18 @@ static ssize_t cpufreq_min_limit_store(struct kobject *kobj,
 					__func__, cpufreq_max_limit_val);
 				}
 				/* Update PRCMU QOS value to max value */
+#if 0
 				prcmu_qos_update_requirement(PRCMU_QOS_ARM_KHZ,
 						"power", cpufreq_max_limit_val);
+#endif
 				/* Set replacement flag */
 				min_replacement = 1;
 			} else {
 				/* Update PRCMU QOS value to new value */
+#if 0
 				prcmu_qos_update_requirement(PRCMU_QOS_ARM_KHZ,
 						"power", cpufreq_min_limit_val);
+#endif
 			}
 		} else /* Invalid lock request --> No action */
 			printk(KERN_ERR "%s: Lock request is invalid\n",
@@ -837,8 +847,10 @@ static int __init pm_init(void)
 #ifdef CONFIG_DVFS_LIMIT
 	cpufreq_register_notifier(&dvfs_cpufreq_notifier_block,
 				  CPUFREQ_POLICY_NOTIFIER);
+#if 0
 	prcmu_qos_add_requirement(PRCMU_QOS_ARM_KHZ, "power",
 				  PRCMU_QOS_DEFAULT_VALUE);
+#endif
 #endif
 	return sysfs_create_group(power_kobj, &attr_group);
 }

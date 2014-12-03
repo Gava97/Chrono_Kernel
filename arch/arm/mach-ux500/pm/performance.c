@@ -133,12 +133,14 @@ static void wlan_load(struct work_struct *work)
 	if ((num_irqs > old_num_irqs) &&
 	    (num_irqs - old_num_irqs) > wlan_limit) {
 		if (wlan_arm_khz)
+#if 0
 		prcmu_qos_update_requirement(PRCMU_QOS_ARM_KHZ,
 					     "wlan",
 					     wlan_arm_khz);
+#endif
 		prcmu_qos_update_requirement(PRCMU_QOS_APE_OPP,
 					     "wlan",
-					     PRCMU_QOS_MAX_VALUE);
+					     (signed char) 50);
 		prcmu_qos_update_requirement(PRCMU_QOS_DDR_OPP,
 					     "wlan",
 					     PRCMU_QOS_MAX_VALUE);
@@ -157,12 +159,14 @@ static void wlan_load(struct work_struct *work)
 			wlan_pm_qos_is_latency_0 = true;
 		}
 	} else {
+#if 0
 		prcmu_qos_update_requirement(PRCMU_QOS_ARM_KHZ,
 					     "wlan",
 					     PRCMU_QOS_DEFAULT_VALUE);
+#endif
 		prcmu_qos_update_requirement(PRCMU_QOS_APE_OPP,
 					     "wlan",
-					     PRCMU_QOS_DEFAULT_VALUE);
+					     (signed char)50);
 		prcmu_qos_update_requirement(PRCMU_QOS_DDR_OPP,
 					     "wlan",
 					     PRCMU_QOS_DEFAULT_VALUE);
@@ -262,21 +266,25 @@ static void mmc_load(struct work_struct *work)
 
 	if (!old_mode && new_mode) {
 		if (perf_mmc_arm_khz)
+#if 0
 		prcmu_qos_update_requirement(PRCMU_QOS_ARM_KHZ,
 					     "mmc",
 					     perf_mmc_arm_khz);
+#endif
 		prcmu_qos_update_requirement(PRCMU_QOS_APE_OPP,
 					     "mmc",
-					     PRCMU_QOS_MAX_VALUE);
+					    (signed char) 50);
 		prcmu_qos_update_requirement(PRCMU_QOS_DDR_OPP,
 					     "mmc",
 					     PRCMU_QOS_MAX_VALUE);
 	}
 
 	if (old_mode && !new_mode) {
+#if 0
 		prcmu_qos_update_requirement(PRCMU_QOS_ARM_KHZ,
 					     "mmc",
 					     PRCMU_QOS_DEFAULT_VALUE);
+#endif
 		prcmu_qos_update_requirement(PRCMU_QOS_APE_OPP,
 					     "mmc",
 					     PRCMU_QOS_DEFAULT_VALUE);
@@ -300,17 +308,20 @@ static int __init performance_register(void)
 	int ret;
 
 #ifdef CONFIG_MMC_BLOCK
+#if 0
 	ret_mmc = prcmu_qos_add_requirement(PRCMU_QOS_ARM_KHZ, "mmc",
 					    PRCMU_QOS_DEFAULT_VALUE);
-	if (!ret_mmc)
-		ret_mmc = prcmu_qos_add_requirement(PRCMU_QOS_APE_OPP, "mmc",
+#endif
+	ret_mmc = prcmu_qos_add_requirement(PRCMU_QOS_APE_OPP, "mmc",
 						    PRCMU_QOS_DEFAULT_VALUE);
 	if (!ret_mmc)
 		ret_mmc = prcmu_qos_add_requirement(PRCMU_QOS_DDR_OPP, "mmc",
 						    PRCMU_QOS_DEFAULT_VALUE);
 	if (ret_mmc) {
 		pr_err("%s: Failed to add PRCMU QoS req for mmc\n", __func__);
+#if 0
 		prcmu_qos_remove_requirement(PRCMU_QOS_ARM_KHZ, "mmc");
+#endif
 		prcmu_qos_remove_requirement(PRCMU_QOS_APE_OPP, "mmc");
 		prcmu_qos_remove_requirement(PRCMU_QOS_DDR_OPP, "mmc");
 	} else {
@@ -319,18 +330,20 @@ static int __init performance_register(void)
 				      msecs_to_jiffies(perf_mmc_probe_delay));
 	}
 #endif
-
+#if 0
 	ret_wlan = prcmu_qos_add_requirement(PRCMU_QOS_ARM_KHZ, "wlan",
 					     PRCMU_QOS_DEFAULT_VALUE);
-	if (!ret_wlan)
-		ret_wlan = prcmu_qos_add_requirement(PRCMU_QOS_APE_OPP, "wlan",
+#endif
+	ret_wlan = prcmu_qos_add_requirement(PRCMU_QOS_APE_OPP, "wlan",
 						     PRCMU_QOS_DEFAULT_VALUE);
 	if (!ret_wlan)
 		ret_wlan = prcmu_qos_add_requirement(PRCMU_QOS_DDR_OPP, "wlan",
 						     PRCMU_QOS_DEFAULT_VALUE);
 	if (ret_wlan) {
 		pr_err("%s: Failed to add PRCMU QoS req for wlan\n", __func__);
+#if 0		
 		prcmu_qos_remove_requirement(PRCMU_QOS_ARM_KHZ, "wlan");
+#endif
 		prcmu_qos_remove_requirement(PRCMU_QOS_APE_OPP, "wlan");
 		prcmu_qos_remove_requirement(PRCMU_QOS_DDR_OPP, "wlan");
 	} else {
@@ -338,6 +351,7 @@ static int __init performance_register(void)
 		schedule_delayed_work_on(0, &work_wlan_workaround,
 					 msecs_to_jiffies(wlan_probe_delay));
 	}
+
 
 	performance_kobject = kobject_create_and_add("performance", kernel_kobj);
 	if (!performance_kobject) {
@@ -347,7 +361,6 @@ static int __init performance_register(void)
 	if (ret) {
 		kobject_put(performance_kobject);
 	}
-
 	/* Only return one error code */
 	return ret_mmc ? ret_mmc : (ret_wlan ? ret_wlan : ret);
 }

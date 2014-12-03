@@ -19,7 +19,7 @@
 /* #define TSP_VERBOSE_DEBUG */
 #define TSP_FACTORY
 
-/* #define TOUCH_BOOSTER */
+#define TOUCH_BOOSTER
 #define DISABLE_TOUCHSCREEN_SPAM
 
 #include <linux/kernel.h>
@@ -1512,10 +1512,12 @@ static void bt404_ts_report_touch_data(struct bt404_ts_data *data,
 			PRCMU_QOS_DDR_OPP,
 			(char *)data->client->name,
 			PRCMU_QOS_DEFAULT_VALUE);
+		/*
 		prcmu_qos_update_requirement(
 			PRCMU_QOS_ARM_KHZ,
 			(char *)data->client->name,
 			PRCMU_QOS_DEFAULT_VALUE);
+		*/
 #endif
 		return;
 	}
@@ -1562,10 +1564,12 @@ static void bt404_ts_report_touch_data(struct bt404_ts_data *data,
 					PRCMU_QOS_DDR_OPP,
 					(char *)data->client->name,
 					PRCMU_QOS_DEFAULT_VALUE);
+				/*
 				prcmu_qos_update_requirement(
 					PRCMU_QOS_ARM_KHZ,
 					(char *)data->client->name,
 					PRCMU_QOS_DEFAULT_VALUE);
+				*/
 			}
 #endif
 			continue;
@@ -1583,15 +1587,17 @@ static void bt404_ts_report_touch_data(struct bt404_ts_data *data,
 					prcmu_qos_update_requirement(
 						PRCMU_QOS_APE_OPP,
 						(char *)data->client->name,
-						PRCMU_QOS_APE_OPP_MAX);
+						(signed char)100);
 					prcmu_qos_update_requirement(
 						PRCMU_QOS_DDR_OPP,
 						(char *)data->client->name,
-						PRCMU_QOS_DDR_OPP_MAX);
-					prcmu_qos_update_requirement(
+						(signed char)50);
+				/*	
+ 				prcmu_qos_update_requirement(
 						PRCMU_QOS_ARM_KHZ,
 						(char *)data->client->name,
 						800000);
+					*/
 				}
 
 				data->finger_cnt++;
@@ -4045,8 +4051,8 @@ static int bt404_ts_probe(struct i2c_client *client,
 				  PRCMU_QOS_DEFAULT_VALUE);
 	prcmu_qos_add_requirement(PRCMU_QOS_DDR_OPP, (char *)client->name,
 				  PRCMU_QOS_DEFAULT_VALUE);
-	prcmu_qos_add_requirement(PRCMU_QOS_ARM_KHZ, (char *)client->name,
-				  PRCMU_QOS_DEFAULT_VALUE);
+	//prcmu_qos_add_requirement(PRCMU_QOS_ARM_KHZ, (char *)client->name,
+	//			  PRCMU_QOS_DEFAULT_VALUE);
 	dev_info(&client->dev, "add_prcmu_qos is added\n");
 #endif
 
