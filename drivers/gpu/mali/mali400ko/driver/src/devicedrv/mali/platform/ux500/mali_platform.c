@@ -38,7 +38,7 @@
 #endif
 
 #define MALI_HIGH_TO_LOW_LEVEL_UTILIZATION_LIMIT 48
-#define MALI_LOW_TO_HIGH_LEVEL_UTILIZATION_LIMIT 96
+#define MALI_LOW_TO_HIGH_LEVEL_UTILIZATION_LIMIT 128
 
 #define MALI_UX500_VERSION		"1.1.3"
 
@@ -83,14 +83,12 @@ static struct mali_dvfs_data mali_dvfs[] = {
 	{560640, 0x01050192, 0x2F},
 	{579840, 0x01050197, 0x30},
 	{600000, 0x0105019C, 0x32},
-	{618240, 0x010501A1, 0x33},
-	{641280, 0x010501A7, 0x34},
-	{660480, 0x010501AC, 0x39},
-	{679680, 0x010501B1, 0x39},
-	{702720, 0x010501B7, 0x39},
-	{710400, 0x010501B9, 0x39},
-	{721920, 0x010501BC, 0x3F},
-	{729600, 0x010501BE, 0x3F},
+	{618240, 0x010501A1, 0x35},
+	{641280, 0x010501A7, 0x35},
+	{660480, 0x010501AC, 0x35},
+	{679680, 0x010501B1, 0x35},
+	{702720, 0x010501B7, 0x35},
+	{710400, 0x010501B9, 0x35},
 };
 
 int mali_utilization_high_to_low = MALI_HIGH_TO_LOW_LEVEL_UTILIZATION_LIMIT;
@@ -115,7 +113,7 @@ static u32 boost_low 		= 0;
 static u32 boost_high 		= 0;
 static u32 boost_cur		= 0;
 
-static u32 boost_stat[24];
+static u32 boost_stat[22];
 static u32 boost_stat_opp50	= 0;
 static u32 boost_stat_total	= 0;
 
@@ -344,9 +342,7 @@ void mali_utilization_function(struct work_struct *ptr)
 			prcmu_set_ape_opp(APE_100_OPP);
 			has_requested_low = 0;
 		} else {
-			if (!mali_freq_up()) // increase frequency
-				prcmu_qos_update_requirement(PRCMU_QOS_ARM_KHZ, "mali", 
-							     PRCMU_QOS_MAX_VALUE);
+			mali_freq_up(); // increase frequency
 		}
 	} else {
 		if (mali_last_utilization < mali_utilization_high_to_low) {
@@ -355,7 +351,6 @@ void mali_utilization_function(struct work_struct *ptr)
 					MALI_DEBUG_PRINT(5, ("MALI GPU utilization: %u SIGNAL_LOW\n", mali_last_utilization));
 					prcmu_qos_update_requirement(PRCMU_QOS_DDR_OPP, "mali", PRCMU_QOS_DEFAULT_VALUE);
 					prcmu_qos_update_requirement(PRCMU_QOS_APE_OPP, "mali", PRCMU_QOS_DEFAULT_VALUE);
-					prcmu_qos_update_requirement(PRCMU_QOS_ARM_KHZ, "mali", PRCMU_QOS_DEFAULT_VALUE);
 					prcmu_set_ape_opp(APE_50_OPP);
 					has_requested_low = 1;
 				} 
@@ -738,7 +733,6 @@ _mali_osk_errcode_t mali_platform_init()
 
 		prcmu_qos_add_requirement(PRCMU_QOS_APE_OPP, "mali", PRCMU_QOS_DEFAULT_VALUE);
 		prcmu_qos_add_requirement(PRCMU_QOS_DDR_OPP, "mali", PRCMU_QOS_DEFAULT_VALUE);
-		prcmu_qos_add_requirement(PRCMU_QOS_ARM_KHZ, "mali", PRCMU_QOS_DEFAULT_VALUE);
 
 		pr_info("[Mali] DB8500 GPU OC Initialized (%s)\n", MALI_UX500_VERSION);
 
