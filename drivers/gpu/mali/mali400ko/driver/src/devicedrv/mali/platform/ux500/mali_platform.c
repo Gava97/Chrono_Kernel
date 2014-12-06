@@ -37,8 +37,8 @@
 #include <linux/mfd/dbx500-prcmu.h>
 #endif
 
-#define MALI_HIGH_TO_LOW_LEVEL_UTILIZATION_LIMIT 48
-#define MALI_LOW_TO_HIGH_LEVEL_UTILIZATION_LIMIT 128
+#define MALI_HIGH_TO_LOW_LEVEL_UTILIZATION_LIMIT 96
+#define MALI_LOW_TO_HIGH_LEVEL_UTILIZATION_LIMIT 192
 
 #define MALI_UX500_VERSION		"1.1.3"
 
@@ -56,8 +56,8 @@
 #define AB8500_VAPE_MIN_UV		700000
 #define AB8500_VAPE_MAX_UV		1362500
 
-#define MALI_CLOCK_DEFLO		5
-#define MALI_CLOCK_DEFHI		8
+#define MALI_CLOCK_DEFLO		3
+#define MALI_CLOCK_DEFHI		5
 
 struct mali_dvfs_data
 {
@@ -67,28 +67,16 @@ struct mali_dvfs_data
 };
 
 static struct mali_dvfs_data mali_dvfs[] = {
-	{192000, 0x01050132, 0x26},
-	{253440, 0x01050142, 0x26},
-	{299520, 0x0105014E, 0x26},
-	{318720, 0x01050153, 0x26},
-	{360000, 0x0105015E, 0x26},
-	{399360, 0x01050168, 0x26},
-	{422400, 0x0105016E, 0x26},
-	{441600, 0x01050173, 0x26},
-	{460800, 0x01050178, 0x29},
-	{480000, 0x0105017D, 0x2A},
-	{499200, 0x01050182, 0x2B},
-	{518400, 0x01050187, 0x2C},
-	{537600, 0x0105018C, 0x2D},
-	{560640, 0x01050192, 0x2F},
-	{579840, 0x01050197, 0x30},
-	{600000, 0x0105019C, 0x32},
-	{618240, 0x010501A1, 0x35},
-	{641280, 0x010501A7, 0x35},
-	{660480, 0x010501AC, 0x35},
-	{679680, 0x010501B1, 0x35},
-	{702720, 0x010501B7, 0x35},
-	{710400, 0x010501B9, 0x35},
+	{128000, 0x01030114, 0x1c},
+	{192000, 0x0103011e, 0x20},
+	{256000, 0x01030128, 0x20},
+	{320000, 0x01030132, 0x28},
+	{384000, 0x0103013c, 0x28},
+	{448000, 0x01030146, 0x2c},
+	{512000, 0x01030150, 0x2c},
+	{576000, 0x0103015a, 0x30},
+	{640000, 0x01030164, 0x30},
+	{704000, 0x0103016e, 0x35},
 };
 
 int mali_utilization_high_to_low = MALI_HIGH_TO_LOW_LEVEL_UTILIZATION_LIMIT;
@@ -113,7 +101,7 @@ static u32 boost_low 		= 0;
 static u32 boost_high 		= 0;
 static u32 boost_cur		= 0;
 
-static u32 boost_stat[22];
+static u32 boost_stat[15];
 static u32 boost_stat_opp50	= 0;
 static u32 boost_stat_total	= 0;
 
