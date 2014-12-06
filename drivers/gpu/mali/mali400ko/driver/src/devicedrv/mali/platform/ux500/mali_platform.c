@@ -75,8 +75,8 @@ static struct mali_dvfs_data mali_dvfs[] = {
 	{448000, 0x01030146, 0x2c},
 	{512000, 0x01030150, 0x2c},
 	{576000, 0x0103015a, 0x30},
-	{640000, 0x01030164, 0x30},
-	{704000, 0x0103016e, 0x35},
+	{640000, 0x01030164, 0x3f},
+	{704000, 0x0103016e, 0x3f},
 };
 
 int mali_utilization_high_to_low = MALI_HIGH_TO_LOW_LEVEL_UTILIZATION_LIMIT;
