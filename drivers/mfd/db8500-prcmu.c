@@ -1222,35 +1222,23 @@ static struct liveopp_arm_table liveopp_arm[] = {
 /* table for others */
 static struct liveopp_arm_table liveopp_arm[] = {
 //	| CLK            | PLL       | VDD | VBB | DDR | APE |
-	{  30000,   30720, 0x00050104, 0x16, 0xDB,  25,  25},
-	{  50000,   46080, 0x00050106, 0x16, 0xDB,  25,  25},
-	{  85000,   84480, 0x0005010B, 0x17, 0xDB,  25,  25},
-	{ 100000,   99840, 0x0005010D, 0x17, 0xDB,  25,  25},
-	{ 125000,  122880, 0x00050110, 0x17, 0xDB,  25,  25},
-	{ 150000,  153600, 0x00050114, 0x17, 0xDB,  25,  25},
-	{ 175000,  176640, 0x00050117, 0x17, 0xDB,  25,  25},
-	{ 184000,  184320, 0x00050118, 0x18, 0xDB,  25,  25},
 	{ 200000,  199680, 0x0005011A, 0x18, 0xDB,  25,  50},
 	{ 250000,  253440, 0x00050121, 0x18, 0xDB,  25,  50},
-	{ 275000,  276480, 0x00050124, 0x18, 0xDB,  25,  50},
-	{ 300000,  299520, 0x00050127, 0x19, 0xDB,  25,  50},
-	{ 350000,  353280, 0x0005012E, 0x1a, 0xDB,  25,  50},
-	{ 400000,  399360, 0x00050134, 0x1a, 0xDB,  50,  50},
+	{ 300000,  299520, 0x00050127, 0x18, 0xDB,  25,  50},
+	{ 350000,  353280, 0x0005012E, 0x18, 0xDB,  25,  50},
+	{ 400000,  399360, 0x00050134, 0x18, 0xDB,  50,  50},
 	{ 450000,  453120, 0x0005013B, 0x20, 0xDB,  50,  50},
 	{ 500000,  499200, 0x00050141, 0x20, 0xDB,  50,  50},
-	{ 530000,  529920, 0x00050145, 0x20, 0xDB,  50,  50},
-	{ 550000,  552960, 0x00050148, 0x21, 0xDB,  50,  50},
-	{ 575000,  576000, 0x0005014b, 0x22, 0xDB,  50,  50},
-	{ 600000,  599040, 0x0005014E, 0x23, 0xDB,  50,  50},
+	{ 550000,  552960, 0x00050148, 0x20, 0xDB,  50,  50},
+	{ 600000,  599040, 0x0005014E, 0x20, 0xDB,  50,  50},
 	{ 700000,  698880, 0x0005015B, 0x24, 0xDB,  50,  50},
 	{ 800000,  798720, 0x00050168, 0x24, 0xDB, 100,  50},
-	{ 900000,  898560, 0x00050175, 0x30, 0xDB, 100,  50},
-	{1000000,  998400, 0x00050182, 0x31, 0x8F, 100, 100},
-	{1100000, 1098240, 0x0005018F, 0x36, 0x8F, 100, 100},
-	{1150000, 1152000, 0x00050196, 0x36, 0x8F, 100, 100},
-	{1200000, 1198080, 0x0005019C, 0x37, 0x8F, 100, 100},
-	{1230000, 1228800, 0x000501A0, 0x38, 0x8F, 100, 100},
-	{1245000, 1244160, 0x000501A2, 0x38, 0x8F, 100, 100},
+	{1000000,  998400, 0x00050182, 0x31, 0x8F, 100,  50},
+	{1100000, 1098240, 0x0005018F, 0x36, 0x8F, 100,  50},
+	{1150000, 1152000, 0x00050196, 0x36, 0x8F, 100,  50},
+	{1200000, 1198080, 0x0005019C, 0x37, 0x8F, 100,  50},
+	{1230000, 1228800, 0x000501A0, 0x38, 0x8F, 100,  50},
+	{1245000, 1244160, 0x000501A2, 0x38, 0x8F, 100,  50},
 };
 #endif
 
@@ -1819,18 +1807,6 @@ ARM_STEP(arm_step13, 13);
 ARM_STEP(arm_step14, 14);
 ARM_STEP(arm_step15, 15);
 ARM_STEP(arm_step16, 16);
-ARM_STEP(arm_step17, 17);
-ARM_STEP(arm_step18, 18);
-ARM_STEP(arm_step19, 19);
-ARM_STEP(arm_step20, 20);
-ARM_STEP(arm_step21, 21);
-ARM_STEP(arm_step22, 22);
-ARM_STEP(arm_step23, 23);
-ARM_STEP(arm_step24, 24);
-ARM_STEP(arm_step25, 25);
-ARM_STEP(arm_step26, 26);
-ARM_STEP(arm_step27, 27);
-ARM_STEP(arm_step28, 28);
 
 #if CONFIG_LIVEOPP_DEBUG > 1
 static ssize_t liveopp_start_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)		
@@ -2026,18 +2002,6 @@ static struct attribute *liveopp_attrs[] = {
 	&arm_step14_interface.attr, 
 	&arm_step15_interface.attr, 
 	&arm_step16_interface.attr, 
-	&arm_step17_interface.attr, 
-	&arm_step18_interface.attr, 
-	&arm_step19_interface.attr, 
-	&arm_step20_interface.attr, 
-	&arm_step21_interface.attr, 
-	&arm_step22_interface.attr, 
-	&arm_step23_interface.attr, 
-	&arm_step24_interface.attr, 
-	&arm_step25_interface.attr,
-	&arm_step26_interface.attr, 
-	&arm_step27_interface.attr, 
-	&arm_step28_interface.attr,
 	&pllddr_interface.attr, 
 	&pllddr_cross_clocks_interface.attr,
 	&regu_ctrl2_interface.attr,
@@ -5262,46 +5226,8 @@ static void  db8500_prcmu_update_freq(void *pdata)
 		}
 
 		switch (liveopp_arm[i].freq_show) {
-			case 30000:
-			case 50000:
-			case 85000:
-			case 100000:
-			case 125000:
-				liveopp_arm[i].varm_raw = avs_varm_50;
-				break;
-			case 150000:
-			case 175000:
-			case 184000:
-			case 200000:
-				liveopp_arm[i].varm_raw = avs_varm_50;
-				break;
-			case 250000:
-			case 275000:
-			case 300000:
-				liveopp_arm[i].varm_raw = avs_varm_50;
-				break;
-			case 350000:
-			case 400000:
-				liveopp_arm[i].varm_raw = avs_varm_50;
-				break;
-			case 450000:
-			case 500000:
-				liveopp_arm[i].varm_raw = max(avs_varm_50  + 3, avs_varm_100 - 6);
-				break;
-			case 530000:
-			case 550000:
-			case 575000:
-			case 600000:
-				liveopp_arm[i].varm_raw = max(avs_varm_50 + 6, avs_varm_100 - 3);
-				break;
-			case 700000:
-				liveopp_arm[i].varm_raw = avs_varm_100 - 2;
-				break;
 			case 800000:
 				liveopp_arm[i].varm_raw = avs_varm_100;
-				break;
-			case 900000:
-				liveopp_arm[i].varm_raw = avs_varm_max - 1;
 				break;
 			case 1000000:
 				liveopp_arm[i].varm_raw = avs_varm_max;
