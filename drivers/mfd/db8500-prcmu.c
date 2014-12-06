@@ -1229,16 +1229,16 @@ static struct liveopp_arm_table liveopp_arm[] = {
 	{ 400000,  399360, 0x00050134, 0x18, 0xDB,  50,  50},
 	{ 450000,  453120, 0x0005013B, 0x20, 0xDB,  50,  50},
 	{ 500000,  499200, 0x00050141, 0x20, 0xDB,  50,  50},
-	{ 550000,  552960, 0x00050148, 0x20, 0xDB,  50,  50},
-	{ 600000,  599040, 0x0005014E, 0x20, 0xDB,  50,  50},
-	{ 700000,  698880, 0x0005015B, 0x24, 0xDB,  50,  50},
-	{ 800000,  798720, 0x00050168, 0x24, 0xDB, 100,  50},
-	{1000000,  998400, 0x00050182, 0x31, 0x8F, 100,  50},
-	{1100000, 1098240, 0x0005018F, 0x36, 0x8F, 100,  50},
-	{1150000, 1152000, 0x00050196, 0x36, 0x8F, 100,  50},
-	{1200000, 1198080, 0x0005019C, 0x37, 0x8F, 100,  50},
-	{1230000, 1228800, 0x000501A0, 0x38, 0x8F, 100,  50},
-	{1245000, 1244160, 0x000501A2, 0x38, 0x8F, 100,  50},
+	{ 550000,  552960, 0x00050148, 0x20, 0xDB,  50,  100},
+	{ 600000,  599040, 0x0005014E, 0x20, 0xDB,  50,  100},
+	{ 700000,  698880, 0x0005015B, 0x24, 0xDB,  50,  100},
+	{ 800000,  798720, 0x00050168, 0x24, 0xDB, 100,  100},
+	{1000000,  998400, 0x00050182, 0x31, 0x8F, 100,  100},
+	{1100000, 1098240, 0x0005018F, 0x36, 0x8F, 100,  100},
+	{1150000, 1152000, 0x00050196, 0x36, 0x8F, 100,  100},
+	{1200000, 1198080, 0x0005019C, 0x37, 0x8F, 100,  100},
+	{1230000, 1228800, 0x000501A0, 0x38, 0x8F, 100,  100},
+	{1245000, 1244160, 0x000501A2, 0x38, 0x8F, 100,  100},
 };
 #endif
 
@@ -1846,14 +1846,9 @@ static ssize_t pllddr_store(struct kobject *kobj, struct kobj_attribute *attr, c
 	
 	if (new_divider != old_divider)
 	{ 
-		/* changing divider is unstable */
 		return -EINVAL;
 	}
 
-       /*
-	* I don't know why, but if we immediately set new value to PRCMU_PLLDDR_REG,
-	* it'll cause reboot. Only following way works properly.
-	*/
 	for (val = old_val;
 	     (new_val > old_val) ? (val <= new_val) : (val >= new_val); 
 	     (new_val > old_val) ? val++ : val--) {
@@ -1946,34 +1941,6 @@ invalid_input:
 }
 ATTR_RW(pllddr_cross_clocks);
 
-static ssize_t regu_ctrl2_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
-{
-	u8 reg, val;
-	
-	for (reg = 0; reg < 0xff; reg++) {
-		prcmu_abb_read(AB8500_REGU_CTRL2, reg, &val, 1);
-		sprintf(buf, "%sREG[%#04x] = %x\n", buf, reg, (int)val);
-	}
-	
-	return strlen(buf);
-}
-
-static ssize_t regu_ctrl2_store(struct kobject *kobj, struct kobj_attribute *attr, const char *buf, size_t count)
-{
-	int ret, reg, val;
-	
-	u8 u8_val; //FIXME: how to get rid of using this variable without compiling warnings?
-	
-	ret = sscanf(&buf[0], "%04x%04x", &reg, &val);
-	
-	u8_val = (u8) val;
-	
-	prcmu_abb_write(AB8500_REGU_CTRL2, (u8)reg, &u8_val, 1);
-	
-	return ret;
-}
-ATTR_RW(regu_ctrl2);
-
 static struct attribute *liveopp_attrs[] = {
 #if CONFIG_LIVEOPP_DEBUG > 1
 	&liveopp_start_interface.attr, 
@@ -2004,7 +1971,6 @@ static struct attribute *liveopp_attrs[] = {
 	&arm_step16_interface.attr, 
 	&pllddr_interface.attr, 
 	&pllddr_cross_clocks_interface.attr,
-	&regu_ctrl2_interface.attr,
 	NULL,
 };
 
