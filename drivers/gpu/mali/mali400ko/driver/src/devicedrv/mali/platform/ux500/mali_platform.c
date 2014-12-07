@@ -76,7 +76,9 @@ static struct mali_dvfs_data mali_dvfs[] = {
 	{512000, 0x01030150, 0x2c},
 	{576000, 0x0103015a, 0x36},
 	{640000, 0x01030164, 0x3f},
+	{672000, 0x01030169, 0x3f},
 	{704000, 0x0103016e, 0x3f},
+	{716800, 0x01030170, 0x3f},
 };
 
 int mali_utilization_high_to_low = MALI_HIGH_TO_LOW_LEVEL_UTILIZATION_LIMIT;
@@ -110,7 +112,7 @@ static u32 boost_low 		= 0;
 static u32 boost_high 		= 0;
 static u32 boost_cur		= 0;
 
-static u32 boost_stat[15];
+static u32 boost_stat[17];
 static u32 boost_stat_opp50	= 0;
 static u32 boost_stat_total	= 0;
 
@@ -274,10 +276,6 @@ static void mali_boost_init(void)
 			mali_dvfs[boost_low].freq, 
 			mali_dvfs[boost_high].freq);
 	
-	for (i = 0; i<ARRAY_SIZE(boost_stat); i++) {
-		boost_stat[i] = 0;
-	}
-			
 	boost_cur = boost_low;
 }
 
