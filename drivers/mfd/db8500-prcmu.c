@@ -1222,8 +1222,8 @@ static struct liveopp_arm_table liveopp_arm[] = {
 /* table for others */
 static struct liveopp_arm_table liveopp_arm[] = {
 //	| CLK            | PLL       | VDD | VBB | DDR | APE |
-	{ 200000,  199680, 0x0005011A, 0x18, 0xDB,  25,  50},
-	{ 250000,  253440, 0x00050121, 0x18, 0xDB,  25,  50},
+	{ 200000,  199680, 0x0005011A, 0x18, 0xDB,  25,  25},
+	{ 250000,  253440, 0x00050121, 0x18, 0xDB,  25,  25},
 	{ 300000,  299520, 0x00050127, 0x18, 0xDB,  25,  50},
 	{ 350000,  353280, 0x0005012E, 0x18, 0xDB,  25,  50},
 	{ 400000,  399360, 0x00050134, 0x18, 0xDB,  50,  50},
