@@ -1678,21 +1678,21 @@ static void enable_flow(struct mcde_chnl_state *chnl, bool setstate)
 	 */
 	switch (chnl->id) {
 	case MCDE_CHNL_A:
-		WARN_ON_ONCE(mcde_rfld(MCDE_CRA0, FLOEN));
+		mcde_rfld(MCDE_CRA0, FLOEN);
 		mcde_wfld(MCDE_CRA0, ROTEN, chnl->regs.roten);
 		mcde_wfld(MCDE_CRA0, FLOEN, true);
 		break;
 	case MCDE_CHNL_B:
-		WARN_ON_ONCE(mcde_rfld(MCDE_CRB0, FLOEN));
+		mcde_rfld(MCDE_CRB0, FLOEN);
 		mcde_wfld(MCDE_CRB0, ROTEN, chnl->regs.roten);
 		mcde_wfld(MCDE_CRB0, FLOEN, true);
 		break;
 	case MCDE_CHNL_C0:
-		WARN_ON_ONCE(mcde_rfld(MCDE_CRC, C1EN));
+		mcde_rfld(MCDE_CRC, C1EN);
 		mcde_wfld(MCDE_CRC, C1EN, true);
 		break;
 	case MCDE_CHNL_C1:
-		WARN_ON_ONCE(mcde_rfld(MCDE_CRC, C2EN));
+		mcde_rfld(MCDE_CRC, C2EN);
 		mcde_wfld(MCDE_CRC, C2EN, true);
 		break;
 	}
@@ -4216,10 +4216,10 @@ static int __devinit mcde_probe(struct platform_device *pdev)
 
 	INIT_DELAYED_WORK_DEFERRABLE(&hw_timeout_work, work_sleep_function);
 
-	WARN_ON(prcmu_qos_add_requirement(PRCMU_QOS_APE_OPP,
-		dev_name(&pdev->dev), PRCMU_QOS_MAX_VALUE));
-	WARN_ON(prcmu_qos_add_requirement(PRCMU_QOS_DDR_OPP,
-		dev_name(&pdev->dev), PRCMU_QOS_DEFAULT_VALUE));
+	prcmu_qos_add_requirement(PRCMU_QOS_APE_OPP,
+		dev_name(&pdev->dev), PRCMU_QOS_MAX_VALUE);
+	prcmu_qos_add_requirement(PRCMU_QOS_DDR_OPP,
+		dev_name(&pdev->dev), PRCMU_QOS_DEFAULT_VALUE);
 	ret = probe_hw(pdev);
 	if (ret)
 		goto failed_probe_hw;
