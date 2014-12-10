@@ -49,9 +49,9 @@ static struct completion second_cpu_complete = {1,
  */
 void suspend_set_ops(const struct platform_suspend_ops *ops)
 {
-	lock_system_sleep();
+	mutex_lock(&pm_mutex);
 	suspend_ops = ops;
-	unlock_system_sleep();
+	mutex_unlock(&pm_mutex);
 }
 
 bool valid_state(suspend_state_t state)
