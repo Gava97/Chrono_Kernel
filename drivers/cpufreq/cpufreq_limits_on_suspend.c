@@ -51,8 +51,6 @@ EXPORT_SYMBOL(last_input_time);
 
 #define MIN_INPUT_INTERVAL (150 * USEC_PER_MSEC)
 
-extern u32 pllddr_get_raw(void);
-extern void pllddr_set_raw(u32, int);
 extern int get_cpufreq_forced_state(void);
 extern int get_prev_cpufreq(void);
 extern void set_cpufreq_forced_state(bool);
@@ -125,12 +123,10 @@ static void cpufreq_limits_update(bool is_suspend_) {
 
 		new_min = is_suspend_ ? screenoff_min_cpufreq : screenon_min_cpufreq;
 		new_max = is_suspend_ ? screenoff_max_cpufreq : screenon_max_cpufreq;
-		
 		if (new_min)
 			policy->min = new_min;
 		else 
 			pr_err("[cpufreq] new_min == 0\n");
-		
 		if (new_max)
 			policy->max = new_max;
 		else
