@@ -2659,7 +2659,6 @@ static int request_timclk(bool enable)
 static int request_clock(u8 clock, bool enable)
 {
 	u32 val;
-	int divider;
 	unsigned long flags;
 
 	spin_lock_irqsave(&clk_mgt_lock, flags);
@@ -2675,13 +2674,6 @@ static int request_clock(u8 clock, bool enable)
 		clk_mgt[clock].pllsw = (val & PRCM_CLK_MGT_CLKPLLSW_MASK);
 		val &= ~(PRCM_CLK_MGT_CLKEN | PRCM_CLK_MGT_CLKPLLSW_MASK);
 	}
-	
-	if (clk_mgt[clock].reg == PRCM_SGACLK_MGT) {
-		  divider = val & 0xf;
-		  val ^= divider;
-		  val |= 1;
-	}
-	
 	writel(val, clk_mgt[clock].reg);
 
 	/* Release the HW semaphore. */

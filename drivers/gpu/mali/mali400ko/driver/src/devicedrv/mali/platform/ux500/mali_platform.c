@@ -417,10 +417,6 @@ void mali_utilization_function(struct work_struct *ptr)
 					prcmu_qos_update_requirement(PRCMU_QOS_DDR_OPP, "mali", PRCMU_QOS_DEFAULT_VALUE);
 					prcmu_qos_update_requirement(PRCMU_QOS_APE_OPP, "mali", PRCMU_QOS_DEFAULT_VALUE);
 					prcmu_set_ape_opp(APE_50_OPP);
-					
-					/* Don't half sgaclk on ape_opp=50 */
-					force_gpu_fullspeed();
-					
 					has_requested_low = 1;
 			} 
 		}
