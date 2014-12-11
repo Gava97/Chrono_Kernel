@@ -53,6 +53,9 @@ EXPORT_SYMBOL(last_input_time);
 
 extern u32 pllddr_get_raw(void);
 extern void pllddr_set_raw(u32, int);
+extern int get_cpufreq_forced_state(void);
+extern int get_prev_cpufreq(void);
+extern void set_cpufreq_forced_state(bool);
 
 int screen_off_max_cpufreq_get_(void) {
 	return screenoff_max_cpufreq;
@@ -89,6 +92,24 @@ static void requirements_remove_thread(struct work_struct *requirements_remove_w
 }
 static DECLARE_WORK(requirements_remove_work, requirements_remove_thread);
 
+int get_max_cpufreq(void) {
+	struct cpufreq_policy *policy = cpufreq_cpu_get(0);
+	
+	return screenon_max_cpufreq ? screenon_max_cpufreq : policy->max;
+}
+
+int get_min_cpufreq(void) {
+	struct cpufreq_policy *policy = cpufreq_cpu_get(0);
+	
+	return screenon_min_cpufreq ? screenon_min_cpufreq : policy->min;
+}
+
+void set_min_cpufreq(int freq) {
+	struct cpufreq_policy *policy = cpufreq_cpu_get(0); 
+	
+	policy->min = freq;
+}
+
 static void cpufreq_limits_update(bool is_suspend_) {
 	int new_min, new_max;
 	
@@ -104,10 +125,12 @@ static void cpufreq_limits_update(bool is_suspend_) {
 
 		new_min = is_suspend_ ? screenoff_min_cpufreq : screenon_min_cpufreq;
 		new_max = is_suspend_ ? screenoff_max_cpufreq : screenon_max_cpufreq;
+		
 		if (new_min)
 			policy->min = new_min;
 		else 
 			pr_err("[cpufreq] new_min == 0\n");
+		
 		if (new_max)
 			policy->max = new_max;
 		else

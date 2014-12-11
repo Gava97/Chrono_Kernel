@@ -121,6 +121,25 @@ static u32 boost_stat_total	= 0;
 //mutex to protect above variables
 static DEFINE_MUTEX(mali_boost_lock);
 
+extern void set_min_cpufreq(int);
+extern int get_min_cpufreq(void);
+extern int get_max_cpufreq(void);
+
+static bool min_cpufreq_forced_to_max = false;
+static int prev_min_cpufreq;
+
+bool get_cpufreq_forced_state(void) {
+	return min_cpufreq_forced_to_max;
+}
+
+void set_cpufreq_forced_state(bool state) {
+	min_cpufreq_forced_to_max = state;
+}
+
+int get_prev_cpufreq(void) {
+	return prev_min_cpufreq;
+}
+
 static int vape_voltage(u8 raw)
 {
 	if (raw <= 0x35) {
@@ -151,14 +170,15 @@ static int sgaclk_freq(void)
 {
 	u32 soc0pll = prcmu_read(PRCMU_PLLSOC0);
 	u32 sgaclk = prcmu_read(PRCMU_SGACLK);
+	int div;
 
 	if (!(sgaclk & BIT(5)))
 		return 0;
 
-	if (!(sgaclk & 0xf))
-		return 0;
+	div = (sgaclk & 0xf);
+	if (!div) div = 1;
 	
-	return (pllsoc0_freq(soc0pll) / (sgaclk & 0xf));
+	return (pllsoc0_freq(soc0pll) / div);
 }
 
 static int mali_freq_hispeed(int idx)
@@ -208,6 +228,11 @@ static int mali_freq_down(void)
 {
 	u8 vape;
 	u32 pll;
+	
+	if (min_cpufreq_forced_to_max) {
+		set_min_cpufreq(prev_min_cpufreq);
+		min_cpufreq_forced_to_max = false;
+	}
 	
 	if (boost_cur > boost_low) {
 		boost_cur--;
@@ -301,6 +326,19 @@ error:
 	MALI_ERROR(_MALI_OSK_ERR_FAULT);
 }
 
+void force_gpu_fullspeed(void) {
+	u32 sgaclk;
+	int divider;
+	
+	sgaclk = prcmu_read(PRCMU_SGACLK);
+	divider = sgaclk & 0xf;
+	if (divider != 1) {
+		sgaclk ^= divider;
+		sgaclk |= 1;
+		prcmu_write(PRCMU_SGACLK, sgaclk);
+	}
+}
+
 /* Original code behavior
  * Rationale behind the values for: (switching between APE_50_OPP and APE_100_OPP)
  * MALI_HIGH_LEVEL_UTILIZATION_LIMIT and MALI_LOW_LEVEL_UTILIZATION_LIMIT
@@ -334,8 +372,6 @@ void mali_utilization_function(struct work_struct *ptr)
 {
 	/*By default, platform start with 50% APE OPP and 25% DDR OPP*/
 	static u32 has_requested_low = 1;
-	u32 sgaclk;
-	int divider;
 
 	MALI_DEBUG_PRINT(5, ("MALI GPU utilization: %u\n", mali_last_utilization));
 
@@ -361,9 +397,18 @@ void mali_utilization_function(struct work_struct *ptr)
 			prcmu_qos_update_requirement(PRCMU_QOS_APE_OPP, "mali", PRCMU_QOS_MAX_VALUE);
 			prcmu_qos_update_requirement(PRCMU_QOS_DDR_OPP, "mali", PRCMU_QOS_MAX_VALUE);
 			prcmu_set_ape_opp(APE_100_OPP);
+
 			has_requested_low = 0;
 		} else {
-			mali_freq_up(); // increase frequency
+			if (!mali_freq_up()) {
+				if (!min_cpufreq_forced_to_max) {
+					prev_min_cpufreq = get_min_cpufreq();
+					set_min_cpufreq(get_max_cpufreq()); // force max cpufreq if reached max gpu freq
+					min_cpufreq_forced_to_max = true;
+					pr_err("[mali] reached max freq %d MHz\n", 
+					       pllsoc0_freq(mali_dvfs[boost_cur].clkpll) / 1000);
+				}
+			}
 		}
 	} else if (mali_last_utilization < mali_utilization_high_to_low) {
 			if (!mali_freq_down()) { // switch to opp50 if at lowest frequency
@@ -374,13 +419,7 @@ void mali_utilization_function(struct work_struct *ptr)
 					prcmu_set_ape_opp(APE_50_OPP);
 					
 					/* Don't half sgaclk on ape_opp=50 */
-					sgaclk = prcmu_read(PRCMU_SGACLK);
-					divider = sgaclk & 0xf;
-					if (divider == 2) {
-						sgaclk ^= divider;
-						sgaclk |= 1;
-						prcmu_write(PRCMU_SGACLK, sgaclk);
-					}
+					force_gpu_fullspeed();
 					
 					has_requested_low = 1;
 			} 
@@ -579,7 +618,7 @@ static ssize_t mali_boost_low_store(struct kobject *kobj, struct kobj_attribute 
 }
 ATTR_RW(mali_boost_low);
 
-static ssize_t mali_boost_hispeed1_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
+static ssize_t mali_boost_hispeed_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
 {
 	sprintf(buf, "%sHIthreshold: %u\n", buf, hispeed1_threshold);
 	sprintf(buf, "%sDVFS idx: %u\n", buf, boost_hispeed1);
@@ -589,7 +628,7 @@ static ssize_t mali_boost_hispeed1_show(struct kobject *kobj, struct kobj_attrib
 	return strlen(buf);
 }
 
-static ssize_t mali_boost_hispeed1_store(struct kobject *kobj, struct kobj_attribute *attr, const char *buf, size_t count)
+static ssize_t mali_boost_hispeed_store(struct kobject *kobj, struct kobj_attribute *attr, const char *buf, size_t count)
 {
 	int val;
 	int i;
@@ -623,8 +662,9 @@ static ssize_t mali_boost_hispeed1_store(struct kobject *kobj, struct kobj_attri
 
 	return -EINVAL;
 }
-ATTR_RW(mali_boost_hispeed1);
+ATTR_RW(mali_boost_hispeed);
 
+/*
 static ssize_t mali_boost_hispeed2_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
 {
 	sprintf(buf, "%sHIthreshold: %u\n", buf, hispeed2_threshold);
@@ -670,6 +710,7 @@ static ssize_t mali_boost_hispeed2_store(struct kobject *kobj, struct kobj_attri
 	return -EINVAL;
 }
 ATTR_RW(mali_boost_hispeed2);
+*/
 
 static ssize_t mali_boost_high_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
 {
@@ -791,8 +832,8 @@ static struct attribute *mali_attrs[] = {
 	&mali_gpu_vape_50_opp_interface.attr,
 	&mali_boost_low_interface.attr, 
 	&mali_boost_high_interface.attr, 
-	&mali_boost_hispeed1_interface.attr, 
-	&mali_boost_hispeed2_interface.attr, 
+	&mali_boost_hispeed_interface.attr, 
+//	&mali_boost_hispeed2_interface.attr, 
 	&mali_dvfs_config_interface.attr, 
 	&mali_available_frequencies_interface.attr,
 	&mali_stats_interface.attr, 
