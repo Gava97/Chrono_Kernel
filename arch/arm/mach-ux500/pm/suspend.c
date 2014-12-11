@@ -308,9 +308,11 @@ static __init int ux500_suspend_init(void)
 	}
 
 	ux500_suspend_dbg_init();
+	/*
 	prcmu_qos_add_requirement(PRCMU_QOS_ARM_KHZ,
 				  "suspend",
 				  PRCMU_QOS_DEFAULT_VALUE);
+	*/
 	suspend_set_ops(&ux500_suspend_ops);
 	return 0;
 }
