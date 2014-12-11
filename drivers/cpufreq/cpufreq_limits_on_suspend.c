@@ -33,8 +33,8 @@ static bool module_is_loaded = false; //FIXME: move code that uses module_is_loa
 static bool cpu_freq_limits = false;
 static bool is_suspend = false;
 
-static unsigned int screenoff_min_cpufreq = 100000;
-static unsigned int screenoff_max_cpufreq = 400000;
+static unsigned int screenoff_min_cpufreq = 200000;
+static unsigned int screenoff_max_cpufreq = 450000;
 
 static unsigned int screenon_min_cpufreq = 0; // screenon_min_cpufreq and screenon_max_cpufreq uses system values
 static unsigned int screenon_max_cpufreq = 0;
@@ -110,9 +110,7 @@ void set_min_cpufreq(int freq) {
 
 static void cpufreq_limits_update(bool is_suspend_) {
 	int new_min, new_max;
-	
-	is_suspend = is_suspend_;
-	
+
 	if (cpu_freq_limits) {
 		
 		/*
@@ -123,14 +121,20 @@ static void cpufreq_limits_update(bool is_suspend_) {
 
 		new_min = is_suspend_ ? screenoff_min_cpufreq : screenon_min_cpufreq;
 		new_max = is_suspend_ ? screenoff_max_cpufreq : screenon_max_cpufreq;
-		if (new_min)
-			policy->min = new_min;
-		else 
-			pr_err("[cpufreq] new_min == 0\n");
-		if (new_max)
-			policy->max = new_max;
-		else
-			pr_err("[cpufreq] new_max == 0\n");
+		
+		if (!screenon_max_cpufreq || !screenon_min_cpufreq ||
+		    !screenoff_min_cpufreq || ! screenoff_max_cpufreq) {
+			if (!is_suspend) {
+				  screenon_min_cpufreq = policy->min;
+				  screenon_max_cpufreq = policy->max;
+			}
+			
+			return;
+		}
+		
+		policy->min = new_min;
+		policy->max = new_max;
+
 		pr_err("[cpufreq_limits] new cpufreqs are %d - %d kHz\n", policy->min, policy->max);
 		
 		if (restore_screenon_max_cpufreq < screenon_max_cpufreq)
@@ -158,11 +162,13 @@ static void late_resume_fn(struct early_suspend *handler)
 static void early_suspend_work_fn(struct work_struct *work)
 {
 	cpufreq_limits_update(true);
+	is_suspend = true;
 }
 
 static void late_resume_work_fn(struct work_struct *work)
 {
 	cpufreq_limits_update(false);
+	is_suspend = false;
 }
 
 static struct early_suspend driver_early_suspend = {
@@ -178,31 +184,28 @@ static int cpufreq_callback(struct notifier_block *nfb,
 	if (event != CPUFREQ_ADJUST)
 		return 0;
 	
-	if (cpu_freq_limits) {
+	struct cpufreq_policy *policy = data; 
 	  
-		struct cpufreq_policy *policy = data;
-		/* FIXME: would be better move that code to init function ?   */
-		if (!module_is_loaded) {
-		
-			/*
-			if (policy)
-				policy->min = 200000;
-			*/
+	if (!is_suspend) {
+		screenon_max_cpufreq = policy->max;
+		screenon_min_cpufreq = policy->min;
+	}
 	
+	if (cpu_freq_limits) {
+		
+		if (!module_is_loaded) {
+		  
 			if (!screenoff_min_cpufreq)
 				  screenoff_min_cpufreq = policy->min;
 			if (!screenoff_max_cpufreq)
 				  screenoff_max_cpufreq = policy->max;
 			module_is_loaded = true;
 		}
-		/*------------------------------------------------------------*/
 	  
 		if (!is_suspend) { 
-			if (screenon_max_cpufreq != policy->max)
-				screenon_max_cpufreq = policy->max;
+			screenon_max_cpufreq = policy->max;
 	
-			if  (screenon_min_cpufreq != policy->min)
-				screenon_min_cpufreq = policy->min;
+			screenon_min_cpufreq = policy->min;
 
 			if  (policy->min == screenoff_min_cpufreq) { 
 				if (restore_screenon_min_cpufreq) {
