@@ -315,6 +315,8 @@ void mali_utilization_function(struct work_struct *ptr)
 {
 	/*By default, platform start with 50% APE OPP and 25% DDR OPP*/
 	static u32 has_requested_low = 1;
+	u32 sgaclk;
+	int divider;
 
 	MALI_DEBUG_PRINT(5, ("MALI GPU utilization: %u\n", mali_last_utilization));
 
@@ -338,6 +340,16 @@ void mali_utilization_function(struct work_struct *ptr)
 					prcmu_qos_update_requirement(PRCMU_QOS_DDR_OPP, "mali", PRCMU_QOS_DEFAULT_VALUE);
 					prcmu_qos_update_requirement(PRCMU_QOS_APE_OPP, "mali", PRCMU_QOS_DEFAULT_VALUE);
 					prcmu_set_ape_opp(APE_50_OPP);
+					
+					/* Don't half sgaclk on ape_opp=50 */
+					sgaclk = prcmu_read(PRCMU_SGACLK);
+					divider = sgaclk & 0xf;
+					if (divider == 2) {
+						sgaclk ^= divider;
+						sgaclk |= 1;
+						prcmu_write(PRCMU_SGACLK, sgaclk);
+					}
+					
 					has_requested_low = 1;
 				} 
 			}
