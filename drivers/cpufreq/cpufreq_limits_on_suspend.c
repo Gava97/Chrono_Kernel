@@ -39,9 +39,6 @@ static unsigned int screenoff_max_cpufreq = 450000;
 static unsigned int screenon_min_cpufreq = 0; // screenon_min_cpufreq and screenon_max_cpufreq uses system values
 static unsigned int screenon_max_cpufreq = 0;
 
-static unsigned int restore_screenon_min_cpufreq = 0;// these values will be gotten from system at load
-static unsigned int restore_screenon_max_cpufreq = 0; 
-
 unsigned int input_boost_freq = 400000;
 EXPORT_SYMBOL(input_boost_freq);
 unsigned int input_boost_ms = 40;
@@ -136,11 +133,6 @@ static void cpufreq_limits_update(bool is_suspend_) {
 		policy->max = new_max;
 
 		pr_err("[cpufreq_limits] new cpufreqs are %d - %d kHz\n", policy->min, policy->max);
-		
-		if (restore_screenon_max_cpufreq < screenon_max_cpufreq)
-			restore_screenon_max_cpufreq = screenon_max_cpufreq;
-		if (restore_screenon_min_cpufreq < screenon_min_cpufreq)
-			restore_screenon_min_cpufreq = screenon_min_cpufreq;
 	}
 }  
 
@@ -206,20 +198,6 @@ static int cpufreq_callback(struct notifier_block *nfb,
 			screenon_max_cpufreq = policy->max;
 	
 			screenon_min_cpufreq = policy->min;
-
-			if  (policy->min == screenoff_min_cpufreq) { 
-				if (restore_screenon_min_cpufreq) {
-					policy->min = restore_screenon_min_cpufreq;
-					pr_err("[cpufreq_limits] min cpufreq restored -> %d kHz\n", policy->min);
-				}
-			}
-			
-			if  (policy->max == screenoff_max_cpufreq) { 
-				if (restore_screenon_max_cpufreq) {
-					policy->max = restore_screenon_max_cpufreq;
-					pr_err("[cpufreq_limits] max cpufreq restored -> %d kHz\n", policy->max);
-				}
-			}
 		}	
 	}
 
