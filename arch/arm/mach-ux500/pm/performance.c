@@ -140,7 +140,7 @@ static void wlan_load(struct work_struct *work)
 #endif
 		prcmu_qos_update_requirement(PRCMU_QOS_APE_OPP,
 					     "wlan",
-					     (signed char) 50);
+					     PRCMU_QOS_MAX_VALUE);
 		prcmu_qos_update_requirement(PRCMU_QOS_DDR_OPP,
 					     "wlan",
 					     PRCMU_QOS_MAX_VALUE);
@@ -166,7 +166,7 @@ static void wlan_load(struct work_struct *work)
 #endif
 		prcmu_qos_update_requirement(PRCMU_QOS_APE_OPP,
 					     "wlan",
-					     (signed char)50);
+					     PRCMU_QOS_DEFAULT_VALUE);
 		prcmu_qos_update_requirement(PRCMU_QOS_DDR_OPP,
 					     "wlan",
 					     PRCMU_QOS_DEFAULT_VALUE);
@@ -273,7 +273,7 @@ static void mmc_load(struct work_struct *work)
 #endif
 		prcmu_qos_update_requirement(PRCMU_QOS_APE_OPP,
 					     "mmc",
-					    (signed char) 50);
+					     PRCMU_QOS_MAX_VALUE);
 		prcmu_qos_update_requirement(PRCMU_QOS_DDR_OPP,
 					     "mmc",
 					     PRCMU_QOS_MAX_VALUE);
