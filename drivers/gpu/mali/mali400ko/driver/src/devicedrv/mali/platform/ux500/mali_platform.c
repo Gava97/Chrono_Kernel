@@ -447,11 +447,11 @@ void mali_utilization_function(struct work_struct *ptr)
 						pr_err("[mali] reached min freq %d MHz\n", 
 							pllsoc0_freq(mali_dvfs[boost_cur].clkpll) / 1000);
 						reached_min_limit = true;
-						prcmu_qos_update_requirement(PRCMU_QOS_DDR_OPP, "mali", PRCMU_QOS_DEFAULT_VALUE);
-						prcmu_qos_update_requirement(PRCMU_QOS_APE_OPP, "mali", PRCMU_QOS_DEFAULT_VALUE);
-						prcmu_set_ape_opp(APE_50_OPP);
-						has_requested_low = 1;
 					}
+					prcmu_qos_update_requirement(PRCMU_QOS_DDR_OPP, "mali", PRCMU_QOS_DEFAULT_VALUE);
+					prcmu_qos_update_requirement(PRCMU_QOS_APE_OPP, "mali", PRCMU_QOS_DEFAULT_VALUE);
+					prcmu_set_ape_opp(APE_50_OPP);
+					has_requested_low = 1;
 			} 
 		}
 	}
