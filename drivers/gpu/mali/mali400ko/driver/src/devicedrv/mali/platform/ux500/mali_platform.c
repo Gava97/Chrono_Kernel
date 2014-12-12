@@ -784,6 +784,20 @@ static ssize_t mali_boost_hispeed2_store(struct kobject *kobj, struct kobj_attri
 }
 ATTR_RW(mali_boost_hispeed2);
 
+static ssize_t mali_debug_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
+{
+	sprintf(buf, "%sboost_cur = %d\n", buf, boost_cur);
+	sprintf(buf, "%spll = %#010x\n", buf, prcmu_read(PRCMU_PLLSOC0));
+	sprintf(buf, "%sape_opp = %s\n", buf, 
+		(prcmu_get_ape_opp() == APE_100_OPP) ? "100" : "50");
+	sprintf(buf, "%sddr_opp = %s\n", buf, 
+		(prcmu_get_ddr_opp() == DDR_100_OPP) ? "100" :
+		((prcmu_get_ddr_opp() == DDR_50_OPP) ? "50" : "25"));
+
+	return strlen(buf);
+}
+ATTR_RO(mali_debug);
+
 static ssize_t mali_dvfs_config_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
 {
 	int i;
@@ -863,6 +877,7 @@ static struct attribute *mali_attrs[] = {
 	&mali_threshold_freq_up_interface.attr,
 	&mali_dvfs_config_interface.attr, 
 	&mali_available_frequencies_interface.attr,
+	&mali_debug_interface.attr,
 	&mali_stats_interface.attr, 
 	NULL,
 };
