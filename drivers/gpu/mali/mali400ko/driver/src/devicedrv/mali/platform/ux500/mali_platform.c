@@ -40,7 +40,7 @@
 #define MALI_HIGH_TO_LOW_LEVEL_UTILIZATION_LIMIT 96
 #define MALI_LOW_TO_HIGH_LEVEL_UTILIZATION_LIMIT 192
 
-#define MALI_UX500_VERSION		"1.1.3"
+#define MALI_UX500_VERSION		"2.0"
 
 #define MALI_MAX_UTILIZATION		256
 
@@ -48,7 +48,7 @@
 #define PRCMU_PLLSOC0			0x0080
 
 #define PRCMU_SGACLK_INIT		0x00000021
-#define PRCMU_PLLSOC0_INIT		0x01050168
+#define PRCMU_PLLSOC0_INIT		0x0103013f
 
 #define AB8500_VAPE_SEL1 		0x0E
 #define AB8500_VAPE_SEL2	 	0x0F
@@ -56,10 +56,9 @@
 #define AB8500_VAPE_MIN_UV		700000
 #define AB8500_VAPE_MAX_UV		1362500
 
-#define MALI_CLOCK_DEFLO		0
-#define MALI_CLOCK_DEFHI		9
+#define MALI_CLOCK_DEFLO		3
 #define MALI_CLOCK_DEFHISPEED1		5
-#define MALI_CLOCK_DEFHISPEED2		7
+#define MALI_CLOCK_DEFHISPEED2		9
 #define MALI_HISPEED1_UTILIZATION_LIMIT 136
 #define MALI_HISPEED2_UTILIZATION_LIMIT 216
 
@@ -71,9 +70,9 @@ struct mali_dvfs_data
 };
 
 static struct mali_dvfs_data mali_dvfs[] = {
-	{128000, 0x01030114, 0x1c},
-	{192000, 0x0103011e, 0x20},
-	{256000, 0x01030128, 0x20},
+	{128000, 0x01030114, 0x26},
+	{192000, 0x0103011e, 0x26},
+	{256000, 0x01030128, 0x26},
 	{320000, 0x01030132, 0x28},
 	{384000, 0x0103013c, 0x28},
 	{403200, 0x0103013f, 0x28},
@@ -109,7 +108,6 @@ static struct wake_lock wakelock;
 #endif
 
 static u32 boost_low 		= MALI_CLOCK_DEFLO;
-static u32 boost_high 		= MALI_CLOCK_DEFHI;
 static u32 boost_cur		= 0;
 static u32 boost_hispeed1	= MALI_CLOCK_DEFHISPEED1;
 static u32 boost_hispeed2	= MALI_CLOCK_DEFHISPEED2;
@@ -186,7 +184,7 @@ static int mali_freq_hispeed(int idx)
 	u8 vape;
 	u32 pll;
 	
-	if (idx > boost_high || idx < boost_low) {
+	if (idx > boost_hispeed2 || idx < boost_low) {
 	    return -1;
 	}
 	
@@ -210,8 +208,12 @@ static int mali_freq_up(void)
 	u8 vape;
 	u32 pll;
 
-	if (boost_cur < boost_high) {
-		boost_cur++;
+	if (boost_cur < boost_hispeed2) {
+		if (boost_cur == boost_low)
+			boost_cur = boost_hispeed1;
+		else
+			boost_cur = boost_hispeed2;
+			
 		vape = mali_dvfs[boost_cur].vape_raw;
 		pll = mali_dvfs[boost_cur].clkpll;
 
@@ -219,7 +221,6 @@ static int mali_freq_up(void)
 		prcmu_write(PRCMU_PLLSOC0, pll);
 		return 1; 
 	} else {
-		boost_cur = boost_high;
 		return 0; // reached table index high
 	}
 }
@@ -235,7 +236,10 @@ static int mali_freq_down(void)
 	}
 	
 	if (boost_cur > boost_low) {
-		boost_cur--;
+		if (boost_cur == boost_hispeed2)
+			boost_cur = boost_hispeed1;
+		else
+			boost_cur = boost_low;
 		vape = mali_dvfs[boost_cur].vape_raw;
 		pll = mali_dvfs[boost_cur].clkpll;
 
@@ -243,7 +247,6 @@ static int mali_freq_down(void)
 		prcmu_write(PRCMU_PLLSOC0, pll);
 		return 1;
 	} else {
-		boost_cur = boost_low;
 		return 0; // reached table index low -> lower qos requirements
 	}
 }
@@ -271,7 +274,7 @@ static void mali_boost_init(void)
 
 	pr_info("[Mali] Booster: %u kHz - %u kHz\n", 
 			mali_dvfs[boost_low].freq, 
-			mali_dvfs[boost_high].freq);
+			mali_dvfs[boost_hispeed2].freq);
 	
 	boost_cur = boost_low;
 }
@@ -294,6 +297,10 @@ static _mali_osk_errcode_t mali_platform_powerdown(void)
 		}
 		is_running = false;
 	}
+	
+	prcmu_qos_update_requirement(PRCMU_QOS_DDR_OPP, "mali", PRCMU_QOS_DEFAULT_VALUE);
+	prcmu_qos_update_requirement(PRCMU_QOS_APE_OPP, "mali", PRCMU_QOS_DEFAULT_VALUE);
+	
 	MALI_DEBUG_PRINT(4, ("mali_platform_powerdown is_running: %u\n", is_running));
 	MALI_SUCCESS;
 }
@@ -326,19 +333,6 @@ error:
 	MALI_ERROR(_MALI_OSK_ERR_FAULT);
 }
 
-void force_gpu_fullspeed(void) {
-	u32 sgaclk;
-	int divider;
-	
-	sgaclk = prcmu_read(PRCMU_SGACLK);
-	divider = sgaclk & 0xf;
-	if (divider != 1) {
-		sgaclk ^= divider;
-		sgaclk |= 1;
-		prcmu_write(PRCMU_SGACLK, sgaclk);
-	}
-}
-
 /* Original code behavior
  * Rationale behind the values for: (switching between APE_50_OPP and APE_100_OPP)
  * MALI_HIGH_LEVEL_UTILIZATION_LIMIT and MALI_LOW_LEVEL_UTILIZATION_LIMIT
@@ -362,11 +356,12 @@ void force_gpu_fullspeed(void) {
 */
 
 /* New behavior:
- * Depending on threshold we make one step up/down in the table until reached limits
- * set by boost_high/boost_low
+ * Depending on utilization we make one step up/down in the table until reached limits
+ * set by mali_threshold_freq_down/mali_threshold_freq_up
  * We start at OPP50 and rise to OPP100 first before frequency is increased
  * We go back to OPP50 after we reached lowest frequency
-*/
+ * We immediately bump gpu freq to hispeed/hispeed2 if utilization exceeds hispeed1_threshold/hispeed2_threshold
+ */
 
 void mali_utilization_function(struct work_struct *ptr)
 {
@@ -376,7 +371,7 @@ void mali_utilization_function(struct work_struct *ptr)
 	MALI_DEBUG_PRINT(5, ("MALI GPU utilization: %u\n", mali_last_utilization));
 
 	mutex_lock(&mali_boost_lock);
-	
+
 	if (mali_last_utilization > hispeed1_threshold) {
 		if (has_requested_low) { // switch to OPP100 before increasing frequency
 			MALI_DEBUG_PRINT(5, ("MALI GPU utilization: %u SIGNAL_HIGH\n", mali_last_utilization));
@@ -385,14 +380,15 @@ void mali_utilization_function(struct work_struct *ptr)
 			prcmu_set_ape_opp(APE_100_OPP);
 			has_requested_low = 0;
 		} else {
-			if (boost_cur < boost_hispeed1) {
+			if (mali_last_utilization > hispeed2_threshold)
+				mali_freq_hispeed(boost_hispeed2);
+			else if (boost_cur < boost_hispeed1)
 				mali_freq_hispeed(boost_hispeed1);
-			}
 		}
 	}
 
 	if (mali_last_utilization > mali_utilization_low_to_high) {
-		if (has_requested_low) { // switch to OPP100 before increasing frequency
+		if (has_requested_low) {
 			MALI_DEBUG_PRINT(5, ("MALI GPU utilization: %u SIGNAL_HIGH\n", mali_last_utilization));
 			prcmu_qos_update_requirement(PRCMU_QOS_APE_OPP, "mali", PRCMU_QOS_MAX_VALUE);
 			prcmu_qos_update_requirement(PRCMU_QOS_DDR_OPP, "mali", PRCMU_QOS_MAX_VALUE);
@@ -414,6 +410,8 @@ void mali_utilization_function(struct work_struct *ptr)
 			if (!mali_freq_down()) { // switch to opp50 if at lowest frequency
 				if (!has_requested_low) {
 					MALI_DEBUG_PRINT(5, ("MALI GPU utilization: %u SIGNAL_LOW\n", mali_last_utilization));
+					pr_err("[mali] reached min freq %d MHz\n", 
+					       pllsoc0_freq(mali_dvfs[boost_cur].clkpll) / 1000);
 					prcmu_qos_update_requirement(PRCMU_QOS_DDR_OPP, "mali", PRCMU_QOS_DEFAULT_VALUE);
 					prcmu_qos_update_requirement(PRCMU_QOS_APE_OPP, "mali", PRCMU_QOS_DEFAULT_VALUE);
 					prcmu_set_ape_opp(APE_50_OPP);
@@ -442,7 +440,7 @@ void mali_utilization_function(struct work_struct *ptr)
 
 static ssize_t version_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
 {
-	return sprintf(buf, "DB8500 GPU OC Driver (%s), cocafe & 1n4148\n", MALI_UX500_VERSION);
+	return sprintf(buf, "DB8500 GPU OC Driver (%s), cocafe, 1n4148, ChronoMonochrome\n", MALI_UX500_VERSION);
 }
 ATTR_RO(version);
 
@@ -566,9 +564,59 @@ static ssize_t mali_gpu_vape_show(struct kobject *kobj, struct kobj_attribute *a
 }
 ATTR_RO(mali_gpu_vape);
 
+static ssize_t mali_threshold_freq_up_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
+{
+	return sprintf(buf, "%d\n", mali_utilization_low_to_high);
+}
+
+static ssize_t mali_threshold_freq_up_store(struct kobject *kobj, struct kobj_attribute *attr, const char *buf, size_t count)
+{
+	int val;
+
+	if (sscanf(buf, "%d", &val)) {
+
+		if (val < 0)
+			  mali_utilization_low_to_high = 0;
+		else if (val > MALI_MAX_UTILIZATION)
+			  mali_utilization_low_to_high = MALI_MAX_UTILIZATION;
+		else
+			  mali_utilization_low_to_high = val;
+
+		return count;
+	}
+
+	return -EINVAL;
+}
+ATTR_RW(mali_threshold_freq_up);
+
+static ssize_t mali_threshold_freq_down_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
+{
+	return sprintf(buf, "%d\n", mali_utilization_high_to_low);
+}
+
+static ssize_t mali_threshold_freq_down_store(struct kobject *kobj, struct kobj_attribute *attr, const char *buf, size_t count)
+{
+	int val;
+
+	if (sscanf(buf, "%d", &val)) {
+
+		if (val < 0)
+			mali_utilization_high_to_low = 0;
+		else if (val > MALI_MAX_UTILIZATION)
+			mali_utilization_high_to_low = MALI_MAX_UTILIZATION;
+		else
+			mali_utilization_high_to_low = val;
+
+		return count;
+	}
+
+	return -EINVAL;
+}
+ATTR_RW(mali_threshold_freq_down);
+
 static ssize_t mali_boost_low_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
 {
-	sprintf(buf, "%sDOWNthreshold: %u\n", buf, mali_utilization_high_to_low);
+	sprintf(buf, "%sLOWthreshold: %u\n", buf, mali_utilization_high_to_low);
 	sprintf(buf, "%sDVFS idx: %u\n", buf, boost_low);
 	sprintf(buf, "%sfrequency: %u kHz\n", buf, mali_dvfs[boost_low].freq);
 	sprintf(buf, "%sVape: %u uV\n", buf, vape_voltage(mali_dvfs[boost_low].vape_raw));
@@ -587,12 +635,6 @@ static ssize_t mali_boost_low_store(struct kobject *kobj, struct kobj_attribute 
 
 		boost_low = val;
 		mali_clock_apply(boost_low);
-
-		return count;
-	}
-
-	if (sscanf(buf, "threshold=%u", &val)) {
-		mali_utilization_high_to_low = val;
 
 		return count;
 	}
@@ -660,7 +702,6 @@ static ssize_t mali_boost_hispeed_store(struct kobject *kobj, struct kobj_attrib
 }
 ATTR_RW(mali_boost_hispeed);
 
-/*
 static ssize_t mali_boost_hispeed2_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
 {
 	sprintf(buf, "%sHIthreshold: %u\n", buf, hispeed2_threshold);
@@ -706,53 +747,6 @@ static ssize_t mali_boost_hispeed2_store(struct kobject *kobj, struct kobj_attri
 	return -EINVAL;
 }
 ATTR_RW(mali_boost_hispeed2);
-*/
-
-static ssize_t mali_boost_high_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
-{
-	sprintf(buf, "%sUPthreshold: %u\n", buf, mali_utilization_low_to_high);
-	sprintf(buf, "%sDVFS idx: %u\n", buf, boost_high);
-	sprintf(buf, "%sfrequency: %u kHz\n", buf, mali_dvfs[boost_high].freq);
-	sprintf(buf, "%sVape: %u uV\n", buf, vape_voltage(mali_dvfs[boost_high].vape_raw));
-
-	return strlen(buf);
-}
-
-static ssize_t mali_boost_high_store(struct kobject *kobj, struct kobj_attribute *attr, const char *buf, size_t count)
-{
-	int val;
-	int i;
-
-	if (sscanf(buf, "idx=%u", &val)) {
-		if (val >= ARRAY_SIZE(mali_dvfs))
-			return -EINVAL;
-
-		boost_high = val;
-
-		return count;
-	}
-
-	if (sscanf(buf, "threshold=%u", &val)) {
-		mali_utilization_low_to_high = val;
-
-		return count;
-	}
-
-	if (sscanf(buf, "%u", &val)) {
-		for (i = 0; i < ARRAY_SIZE(mali_dvfs); i++) {
-			if (mali_dvfs[i].freq == val) {
-				boost_high = i;
-
-				break;
-			}
-		}
-
-		return count;
-	}
-
-	return -EINVAL;
-}
-ATTR_RW(mali_boost_high);
 
 static ssize_t mali_dvfs_config_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
 {
@@ -827,9 +821,10 @@ static struct attribute *mali_attrs[] = {
 	&mali_gpu_vape_interface.attr, 
 	&mali_gpu_vape_50_opp_interface.attr,
 	&mali_boost_low_interface.attr, 
-	&mali_boost_high_interface.attr, 
 	&mali_boost_hispeed_interface.attr, 
-//	&mali_boost_hispeed2_interface.attr, 
+	&mali_boost_hispeed2_interface.attr, 
+	&mali_threshold_freq_down_interface.attr,
+	&mali_threshold_freq_up_interface.attr,
 	&mali_dvfs_config_interface.attr, 
 	&mali_available_frequencies_interface.attr,
 	&mali_stats_interface.attr, 
