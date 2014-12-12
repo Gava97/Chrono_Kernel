@@ -201,32 +201,29 @@ static int mali_freq_hispeed(int idx)
 	prcmu_abb_write(AB8500_REGU_CTRL2, AB8500_VAPE_SEL1, &vape, 1);
 	prcmu_write(PRCMU_PLLSOC0, pll);
 	
+	prev_min_cpufreq = get_min_cpufreq();
+	set_min_cpufreq(get_max_cpufreq()); // force max cpufreq if reached max gpu freq
+	min_cpufreq_forced_to_max = true;
+	
 	return 0; 
 }
 
 static int mali_freq_up(void)
 {
 	u8 vape;
-	u32 prev_pll, pll, new_pll;
+	u32 pll;
 
 	if (boost_cur < boost_hispeed2) {
-		prev_pll = mali_dvfs[boost_cur].clkpll;
-	  
 		if (boost_cur == boost_low)
 			boost_cur = boost_hispeed1;
 		else
 			boost_cur = boost_hispeed2;
 		
 		vape = mali_dvfs[boost_cur].vape_raw;
-		new_pll = mali_dvfs[boost_cur].clkpll;
+		pll = mali_dvfs[boost_cur].clkpll;
 
 		prcmu_abb_write(AB8500_REGU_CTRL2, AB8500_VAPE_SEL1, &vape, 1);
-		for (pll = prev_pll;
-		    (pll > prev_pll) ? (pll <= new_pll) : (pll >= new_pll); 
-		    (new_pll > prev_pll) ? pll++ : pll--) {
-			prcmu_write(PRCMU_PLLSOC0, pll);
-			udelay(350);
-		}
+		prcmu_write(PRCMU_PLLSOC0, pll);
 		return 1; 
 	} else {
 		return 0; // reached table index high
@@ -236,7 +233,7 @@ static int mali_freq_up(void)
 static int mali_freq_down(void)
 {
 	u8 vape;
-	u32 prev_pll, pll, new_pll;
+	u32 pll;
 	
 	if (min_cpufreq_forced_to_max) {
 		set_min_cpufreq(prev_min_cpufreq);
@@ -244,22 +241,15 @@ static int mali_freq_down(void)
 	}
 	
 	if (boost_cur > boost_low) {
-		prev_pll = mali_dvfs[boost_cur].clkpll;
-	  
 		if (boost_cur == boost_hispeed2)
 			boost_cur = boost_hispeed1;
 		else
 			boost_cur = boost_low;
 		
 		vape = mali_dvfs[boost_cur].vape_raw;
-		new_pll = mali_dvfs[boost_cur].clkpll;
+		pll = mali_dvfs[boost_cur].clkpll;
 
-		for (pll = prev_pll;
-		    (pll > prev_pll) ? (pll <= new_pll) : (pll >= new_pll); 
-		    (new_pll > prev_pll) ? pll++ : pll--) {
-			prcmu_write(PRCMU_PLLSOC0, pll);
-			udelay(350);
-		}
+		prcmu_write(PRCMU_PLLSOC0, pll);
 		prcmu_abb_write(AB8500_REGU_CTRL2, AB8500_VAPE_SEL1, &vape, 1);
 		
 		return 1;
@@ -415,11 +405,13 @@ void mali_utilization_function(struct work_struct *ptr)
 		} else {
 			if (!mali_freq_up()) {
 				if (!min_cpufreq_forced_to_max) {
-					prev_min_cpufreq = get_min_cpufreq();
-					set_min_cpufreq(get_max_cpufreq()); // force max cpufreq if reached max gpu freq
-					min_cpufreq_forced_to_max = true;
-					pr_err("[mali] reached max freq %d MHz\n", 
-					       pllsoc0_freq(mali_dvfs[boost_cur].clkpll) / 1000);
+					if (boost_cur < boost_hispeed2) {
+						prev_min_cpufreq = get_min_cpufreq();
+						set_min_cpufreq(get_max_cpufreq()); // force max cpufreq if reached max gpu freq
+						min_cpufreq_forced_to_max = true;
+						pr_err("[mali] reached max freq %d MHz\n", 
+							pllsoc0_freq(mali_dvfs[boost_cur].clkpll) / 1000);
+					}
 				}
 			}
 		}
