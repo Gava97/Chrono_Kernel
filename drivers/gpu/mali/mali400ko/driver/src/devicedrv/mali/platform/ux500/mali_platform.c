@@ -22,6 +22,7 @@
 #include <linux/clk.h>
 #include <linux/io.h>
 #include <linux/workqueue.h>
+#include <linux/delay.h>
 #include <linux/version.h>
 #include <linux/moduleparam.h>
 #include <linux/kobject.h>
@@ -206,18 +207,26 @@ static int mali_freq_hispeed(int idx)
 static int mali_freq_up(void)
 {
 	u8 vape;
-	u32 pll;
+	u32 prev_pll, pll, new_pll;
 
 	if (boost_cur < boost_hispeed2) {
+		prev_pll = mali_dvfs[boost_cur].clkpll;
+	  
 		if (boost_cur == boost_low)
 			boost_cur = boost_hispeed1;
 		else
 			boost_cur = boost_hispeed2;
-			
+		
 		vape = mali_dvfs[boost_cur].vape_raw;
-		pll = mali_dvfs[boost_cur].clkpll;
+		new_pll = mali_dvfs[boost_cur].clkpll;
 
 		prcmu_abb_write(AB8500_REGU_CTRL2, AB8500_VAPE_SEL1, &vape, 1);
+		for (pll = prev_pll;
+		    (pll > prev_pll) ? (pll <= new_pll) : (pll >= new_pll); 
+		    (new_pll > prev_pll) ? pll++ : pll--) {
+			prcmu_write(PRCMU_PLLSOC0, pll);
+			udelay(200);
+		}
 		prcmu_write(PRCMU_PLLSOC0, pll);
 		return 1; 
 	} else {
@@ -228,7 +237,7 @@ static int mali_freq_up(void)
 static int mali_freq_down(void)
 {
 	u8 vape;
-	u32 pll;
+	u32 prev_pll, pll, new_pll;
 	
 	if (min_cpufreq_forced_to_max) {
 		set_min_cpufreq(prev_min_cpufreq);
@@ -236,14 +245,23 @@ static int mali_freq_down(void)
 	}
 	
 	if (boost_cur > boost_low) {
+		prev_pll = mali_dvfs[boost_cur].clkpll;
+	  
 		if (boost_cur == boost_hispeed2)
 			boost_cur = boost_hispeed1;
 		else
 			boost_cur = boost_low;
+		
 		vape = mali_dvfs[boost_cur].vape_raw;
-		pll = mali_dvfs[boost_cur].clkpll;
+		new_pll = mali_dvfs[boost_cur].clkpll;
 
-		prcmu_abb_write(AB8500_REGU_CTRL2, AB8500_VAPE_SEL1,&vape, 1);
+		prcmu_abb_write(AB8500_REGU_CTRL2, AB8500_VAPE_SEL1, &vape, 1);
+		for (pll = prev_pll;
+		    (pll > prev_pll) ? (pll <= new_pll) : (pll >= new_pll); 
+		    (new_pll > prev_pll) ? pll++ : pll--) {
+			prcmu_write(PRCMU_PLLSOC0, pll);
+			udelay(200);
+		}
 		prcmu_write(PRCMU_PLLSOC0, pll);
 		return 1;
 	} else {
