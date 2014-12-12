@@ -320,6 +320,11 @@ static _mali_osk_errcode_t mali_platform_powerdown(void)
 	prcmu_qos_update_requirement(PRCMU_QOS_DDR_OPP, "mali", PRCMU_QOS_DEFAULT_VALUE);
 	prcmu_qos_update_requirement(PRCMU_QOS_APE_OPP, "mali", PRCMU_QOS_DEFAULT_VALUE);
 	
+	if (min_cpufreq_forced_to_max) {
+		set_min_cpufreq(prev_min_cpufreq);
+		min_cpufreq_forced_to_max = false;
+	}
+	
 	MALI_DEBUG_PRINT(4, ("mali_platform_powerdown is_running: %u\n", is_running));
 	MALI_SUCCESS;
 }
