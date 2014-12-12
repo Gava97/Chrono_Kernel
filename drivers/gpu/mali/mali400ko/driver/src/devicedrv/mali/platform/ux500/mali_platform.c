@@ -225,9 +225,8 @@ static int mali_freq_up(void)
 		    (pll > prev_pll) ? (pll <= new_pll) : (pll >= new_pll); 
 		    (new_pll > prev_pll) ? pll++ : pll--) {
 			prcmu_write(PRCMU_PLLSOC0, pll);
-			udelay(200);
+			udelay(350);
 		}
-		prcmu_write(PRCMU_PLLSOC0, pll);
 		return 1; 
 	} else {
 		return 0; // reached table index high
@@ -255,14 +254,14 @@ static int mali_freq_down(void)
 		vape = mali_dvfs[boost_cur].vape_raw;
 		new_pll = mali_dvfs[boost_cur].clkpll;
 
-		prcmu_abb_write(AB8500_REGU_CTRL2, AB8500_VAPE_SEL1, &vape, 1);
 		for (pll = prev_pll;
 		    (pll > prev_pll) ? (pll <= new_pll) : (pll >= new_pll); 
 		    (new_pll > prev_pll) ? pll++ : pll--) {
 			prcmu_write(PRCMU_PLLSOC0, pll);
-			udelay(200);
+			udelay(350);
 		}
-		prcmu_write(PRCMU_PLLSOC0, pll);
+		prcmu_abb_write(AB8500_REGU_CTRL2, AB8500_VAPE_SEL1, &vape, 1);
+		
 		return 1;
 	} else {
 		return 0; // reached table index low -> lower qos requirements
