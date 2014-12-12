@@ -60,8 +60,8 @@
 #define MALI_CLOCK_DEFLO		3
 #define MALI_CLOCK_DEFHISPEED1		5
 #define MALI_CLOCK_DEFHISPEED2		9
-#define MALI_HISPEED1_UTILIZATION_LIMIT 136
-#define MALI_HISPEED2_UTILIZATION_LIMIT 216
+#define MALI_HISPEED1_UTILIZATION_LIMIT 150
+#define MALI_HISPEED2_UTILIZATION_LIMIT 200
 
 struct mali_dvfs_data
 {
@@ -395,7 +395,10 @@ void mali_utilization_function(struct work_struct *ptr)
 		if (has_requested_low) { // switch to OPP100 before increasing frequency
 			MALI_DEBUG_PRINT(5, ("MALI GPU utilization: %u SIGNAL_HIGH\n", mali_last_utilization));
 			prcmu_qos_update_requirement(PRCMU_QOS_APE_OPP, "mali", PRCMU_QOS_MAX_VALUE);
-			prcmu_qos_update_requirement(PRCMU_QOS_DDR_OPP, "mali", PRCMU_QOS_MAX_VALUE);
+			
+			if (boost_cur == boost_hispeed2)
+				prcmu_qos_update_requirement(PRCMU_QOS_DDR_OPP, "mali", PRCMU_QOS_MAX_VALUE);
+			
 			prcmu_set_ape_opp(APE_100_OPP);
 			has_requested_low = 0;
 		} else {
@@ -410,7 +413,10 @@ void mali_utilization_function(struct work_struct *ptr)
 		if (has_requested_low) {
 			MALI_DEBUG_PRINT(5, ("MALI GPU utilization: %u SIGNAL_HIGH\n", mali_last_utilization));
 			prcmu_qos_update_requirement(PRCMU_QOS_APE_OPP, "mali", PRCMU_QOS_MAX_VALUE);
-			prcmu_qos_update_requirement(PRCMU_QOS_DDR_OPP, "mali", PRCMU_QOS_MAX_VALUE);
+			
+			if (boost_cur == boost_hispeed2)
+				prcmu_qos_update_requirement(PRCMU_QOS_DDR_OPP, "mali", PRCMU_QOS_MAX_VALUE);
+			
 			prcmu_set_ape_opp(APE_100_OPP);
 
 			has_requested_low = 0;
