@@ -124,8 +124,9 @@ extern void set_min_cpufreq(int);
 extern int get_min_cpufreq(void);
 extern int get_max_cpufreq(void);
 
-static bool min_cpufreq_forced_to_max = false;
+static bool min_cpufreq_forced_to_max = false, reached_max_limit = false, reached_min_limit = false;
 static int prev_min_cpufreq;
+
 
 bool get_cpufreq_forced_state(void) {
 	return min_cpufreq_forced_to_max;
@@ -186,24 +187,31 @@ static int mali_freq_hispeed(int idx)
 	u32 pll;
 	
 	if (idx > boost_hispeed2 || idx < boost_low) {
-	    return -1;
+		return -1;
 	}
 	
-	if (boost_cur >= idx)
+	if (boost_cur >= idx || boost_cur == boost_hispeed2)
 		return 1;
 
+	reached_min_limit = false;
+	
 	boost_cur = idx;
 	vape = mali_dvfs[boost_cur].vape_raw;
 	pll = mali_dvfs[boost_cur].clkpll;
-		
-	pr_err("[mali] bump to %d MHz\n", pllsoc0_freq(pll) / 1000);
-
+	
+	if (!((idx == boost_hispeed2) && reached_max_limit))
+		pr_err("[mali] bump to %d MHz\n", pllsoc0_freq(pll) / 1000); 
+	else if (idx == boost_hispeed2)
+		reached_max_limit = true;
+	
 	prcmu_abb_write(AB8500_REGU_CTRL2, AB8500_VAPE_SEL1, &vape, 1);
 	prcmu_write(PRCMU_PLLSOC0, pll);
 	
-	prev_min_cpufreq = get_min_cpufreq();
-	set_min_cpufreq(get_max_cpufreq()); // force max cpufreq if reached max gpu freq
-	min_cpufreq_forced_to_max = true;
+	if (!min_cpufreq_forced_to_max) {
+		prev_min_cpufreq = get_min_cpufreq();
+		set_min_cpufreq(get_max_cpufreq()); // force max cpufreq if reached max gpu freq
+		min_cpufreq_forced_to_max = true;
+	}
 	
 	return 0; 
 }
@@ -212,6 +220,8 @@ static int mali_freq_up(void)
 {
 	u8 vape;
 	u32 pll;
+	
+	reached_min_limit = false;
 
 	if (boost_cur < boost_hispeed2) {
 		if (boost_cur == boost_low)
@@ -236,9 +246,11 @@ static int mali_freq_down(void)
 	u32 pll;
 	
 	if (min_cpufreq_forced_to_max) {
-		set_min_cpufreq(prev_min_cpufreq);
+		set_min_cpufreq(prev_min_cpufreq); // unlock cpufreq on every gpu_freq_down
 		min_cpufreq_forced_to_max = false;
 	}
+	
+	reached_max_limit = false;
 	
 	if (boost_cur > boost_low) {
 		if (boost_cur == boost_hispeed2)
@@ -405,13 +417,14 @@ void mali_utilization_function(struct work_struct *ptr)
 		} else {
 			if (!mali_freq_up()) {
 				if (!min_cpufreq_forced_to_max) {
-					if (boost_cur < boost_hispeed2) {
-						prev_min_cpufreq = get_min_cpufreq();
-						set_min_cpufreq(get_max_cpufreq()); // force max cpufreq if reached max gpu freq
-						min_cpufreq_forced_to_max = true;
-						pr_err("[mali] reached max freq %d MHz\n", 
-							pllsoc0_freq(mali_dvfs[boost_cur].clkpll) / 1000);
-					}
+					prev_min_cpufreq = get_min_cpufreq();
+					set_min_cpufreq(get_max_cpufreq()); // force max cpufreq if reached max gpu freq
+					min_cpufreq_forced_to_max = true;
+				}
+				if (!reached_max_limit) {
+					pr_err("[mali] reached max freq %d MHz\n", 
+						pllsoc0_freq(mali_dvfs[boost_cur].clkpll) / 1000);
+					reached_max_limit = true;
 				}
 			}
 		}
@@ -419,12 +432,15 @@ void mali_utilization_function(struct work_struct *ptr)
 			if (!mali_freq_down()) { // switch to opp50 if at lowest frequency
 				if (!has_requested_low) {
 					MALI_DEBUG_PRINT(5, ("MALI GPU utilization: %u SIGNAL_LOW\n", mali_last_utilization));
-					pr_err("[mali] reached min freq %d MHz\n", 
-					       pllsoc0_freq(mali_dvfs[boost_cur].clkpll) / 1000);
-					prcmu_qos_update_requirement(PRCMU_QOS_DDR_OPP, "mali", PRCMU_QOS_DEFAULT_VALUE);
-					prcmu_qos_update_requirement(PRCMU_QOS_APE_OPP, "mali", PRCMU_QOS_DEFAULT_VALUE);
-					prcmu_set_ape_opp(APE_50_OPP);
-					has_requested_low = 1;
+					if (!reached_min_limit) {
+						pr_err("[mali] reached min freq %d MHz\n", 
+							pllsoc0_freq(mali_dvfs[boost_cur].clkpll) / 1000);
+						reached_min_limit = true;
+						prcmu_qos_update_requirement(PRCMU_QOS_DDR_OPP, "mali", PRCMU_QOS_DEFAULT_VALUE);
+						prcmu_qos_update_requirement(PRCMU_QOS_APE_OPP, "mali", PRCMU_QOS_DEFAULT_VALUE);
+						prcmu_set_ape_opp(APE_50_OPP);
+						has_requested_low = 1;
+					}
 			} 
 		}
 	}
