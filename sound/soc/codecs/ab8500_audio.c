@@ -85,6 +85,7 @@ low before proceeding with the configuration sequence */
 #define AB850X_CUT3P0				0x30
 #define AB850X_CUT3P1				0x31
 
+
 /*
  * AB850X register cache & default register settings
  */
@@ -838,9 +839,8 @@ static int vape_voltage(u8 raw)
 	}
 }
 
-#define VAPE_SEL2_DEFAULT 	0x16
-
 static bool lpa_mode_enabled = 0;
+static u8 prev_lpa_vape_sel2 = 0x16;
 static u8 lpa_vape2 = 0x18;
 
 static int abb_codec_lpa_mode(bool suspend)
@@ -863,7 +863,7 @@ static int abb_codec_lpa_mode(bool suspend)
 
 		
 	} else {
-		regval = VAPE_SEL2_DEFAULT;
+		regval = prev_lpa_vape_sel2;
 		ret = prcmu_abb_write(AB8500_REGU_CTRL2,
 					      AB8500_VAPESEL2,
 					      &regval, 1);
@@ -5906,6 +5906,8 @@ struct snd_soc_codec_driver ab850x_codec_driver = {
 	.reg_cache_default =	ab850x_reg_cache,
 };
 
+extern u8 ab8500_get_avs_vape50(void);
+
 static int __devinit ab850x_codec_driver_probe(struct platform_device *pdev)
 {
 	struct ab8500_codec_drvdata *drvdata;
@@ -5969,6 +5971,11 @@ static int __devinit ab850x_codec_driver_probe(struct platform_device *pdev)
 		pr_err("%s: Error: Failed to register codec (%d).\n",
 			__func__, err);
 	}
+	
+	if (!prcmu_abb_read(AB8500_REGU_CTRL2,
+				AB8500_VAPESEL2,
+				&prev_lpa_vape_sel2, 1))
+		pr_err("[ABB-Codec] Failed to get ape50_opp voltage\n");
 
 	abb_codec_kobject = kobject_create_and_add("abb-codec", kernel_kobj);
 
