@@ -93,6 +93,9 @@ int mali_utilization_low_to_high = MALI_LOW_TO_HIGH_LEVEL_UTILIZATION_LIMIT;
 static int hispeed1_threshold = MALI_HISPEED1_UTILIZATION_LIMIT;
 static int hispeed2_threshold = MALI_HISPEED2_UTILIZATION_LIMIT;
 
+static bool force_cpufreq_to_max = true;
+static int force_cpufreq_to_max_threshold = MALI_MAX_UTILIZATION - 5;
+
 static bool is_running;
 static bool is_initialized;
 
@@ -407,8 +410,8 @@ void mali_utilization_function(struct work_struct *ptr)
 			has_requested_low = 0;
 		} else {
 			if (!mali_freq_up()) {
-				if (mali_last_utilization >= MALI_MAX_UTILIZATION - 5) {
-					if (!min_cpufreq_forced_to_max) {
+				if (force_cpufreq_to_max && !min_cpufreq_forced_to_max) {
+					if (mali_last_utilization >= force_cpufreq_to_max_threshold) {
 						prev_min_cpufreq = get_min_cpufreq();
 						set_min_cpufreq(get_max_cpufreq()); // force max cpufreq if reached max gpu freq
 						min_cpufreq_forced_to_max = true;
@@ -618,6 +621,39 @@ static ssize_t mali_threshold_freq_down_store(struct kobject *kobj, struct kobj_
 	return -EINVAL;
 }
 ATTR_RW(mali_threshold_freq_down);
+
+static ssize_t mali_force_cpufreq_to_max_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
+{
+	sprintf(buf, "%sstatus: %s\n", buf, 
+			force_cpufreq_to_max ? "on" : "off");
+	sprintf(buf, "%sthreshold=%d\n", buf, 
+			force_cpufreq_to_max_threshold);
+	
+	return strlen(buf);
+}
+
+static ssize_t mali_force_cpufreq_to_max_store(struct kobject *kobj, struct kobj_attribute *attr, const char *buf, size_t count)
+{
+	int val;
+
+	if (!strncmp(buf, "on", 2)) {
+		force_cpufreq_to_max = true;
+		return count;
+	}
+
+	if (!strncmp(buf, "off", 3)) {
+		force_cpufreq_to_max = false;
+		return count;
+	}
+		
+	if (sscanf(buf, "threshold=%d", &val)) {
+		force_cpufreq_to_max_threshold = val;
+		return count;
+	}
+
+	return -EINVAL;
+}
+ATTR_RW(mali_force_cpufreq_to_max);
 
 static ssize_t mali_boost_low_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
 {
@@ -844,6 +880,7 @@ static struct attribute *mali_attrs[] = {
 	&mali_boost_hispeed2_interface.attr, 
 	&mali_threshold_freq_down_interface.attr,
 	&mali_threshold_freq_up_interface.attr,
+	&mali_force_cpufreq_to_max_interface.attr,
 	&mali_dvfs_config_interface.attr, 
 	&mali_available_frequencies_interface.attr,
 	&mali_debug_interface.attr,
