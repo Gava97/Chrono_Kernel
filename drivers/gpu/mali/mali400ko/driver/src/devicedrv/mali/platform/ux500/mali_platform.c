@@ -201,12 +201,6 @@ static int mali_freq_hispeed(int idx)
 	prcmu_abb_write(AB8500_REGU_CTRL2, AB8500_VAPE_SEL1, &vape, 1);
 	prcmu_write(PRCMU_PLLSOC0, pll);
 	
-	if (!min_cpufreq_forced_to_max) {
-		prev_min_cpufreq = get_min_cpufreq();
-		set_min_cpufreq(get_max_cpufreq()); // force max cpufreq if reached max gpu freq
-		min_cpufreq_forced_to_max = true;
-	}
-	
 	return 0; 
 }
 
@@ -413,10 +407,12 @@ void mali_utilization_function(struct work_struct *ptr)
 			has_requested_low = 0;
 		} else {
 			if (!mali_freq_up()) {
-				if (!min_cpufreq_forced_to_max) {
-					prev_min_cpufreq = get_min_cpufreq();
-					set_min_cpufreq(get_max_cpufreq()); // force max cpufreq if reached max gpu freq
-					min_cpufreq_forced_to_max = true;
+				if (mali_last_utilization >= MALI_MAX_UTILIZATION - 5) {
+					if (!min_cpufreq_forced_to_max) {
+						prev_min_cpufreq = get_min_cpufreq();
+						set_min_cpufreq(get_max_cpufreq()); // force max cpufreq if reached max gpu freq
+						min_cpufreq_forced_to_max = true;
+					}
 				}
 			}
 		}
