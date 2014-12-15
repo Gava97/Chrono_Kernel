@@ -841,9 +841,12 @@ static int vape_voltage(u8 raw)
 
 static bool lpa_mode_enabled = 0;
 static u8 prev_lpa_vape_sel2 = 0x16;
-static u8 lpa_vape2 = 0x18;
+static u8 lpa_vape2_headset = 0x18;
+static u8 lpa_vape2_speaker = 0x16;
 
-static int abb_codec_lpa_mode(bool suspend)
+static bool is_suspend = false;
+
+static int abb_codec_lpa_mode(bool suspend, int jack_type)
 {
 	int ret;
 	u8 regval;
@@ -854,7 +857,7 @@ static int abb_codec_lpa_mode(bool suspend)
 	 * but also supplies to SXA engines in running state.
 	 */
 	if (suspend) {
-		regval = lpa_vape2;
+		regval = jack_type ? lpa_vape2_headset : lpa_vape2_speaker;
 		ret = prcmu_abb_write(AB8500_REGU_CTRL2,
 					      AB8500_VAPESEL2,
 					      &regval, 1);
@@ -870,6 +873,11 @@ static int abb_codec_lpa_mode(bool suspend)
 
 		return ret;
 	}
+}
+
+int jack_lpa_vape_override(int jack_type) 
+{
+	abb_codec_lpa_mode(is_suspend, jack_type);
 }
 
 /* Reads an arbitrary register from the ab8500 chip.
@@ -1260,6 +1268,8 @@ static int if0_fifo_enable_control_get(struct snd_kcontrol *kcontrol,
 	return 0;
 }
 
+extern int get_jack_type(void);
+
 static int if0_fifo_enable_control_put(struct snd_kcontrol *kcontrol,
 	struct snd_ctl_elem_value *ucontrol)
 {
@@ -1271,20 +1281,22 @@ static int if0_fifo_enable_control_put(struct snd_kcontrol *kcontrol,
 		set_mask = BMASK(REG_DIGIFCONF3_IF0BFIFOEN);
 
 		pr_debug("%s: IF0 FIFO disable: override APE OPP\n", __func__);
+		is_suspend = true;
 		if (!lpa_mode_enabled) {
-			ret = prcmu_qos_lpa_override(true);
+			ret = prcmu_qos_lpa_override(is_suspend);
 		} else {
-			ret = abb_codec_lpa_mode(true);
+			ret = abb_codec_lpa_mode(is_suspend, get_jack_type());
 		}
 	} else {
 		clear_mask = BMASK(REG_DIGIFCONF3_IF0BFIFOEN);
 		set_mask = 0;
 
 		pr_debug("%s: IF0 FIFO disable: restore APE OPP\n", __func__);
+		is_suspend = false;
 		if (!lpa_mode_enabled) {
-			ret = prcmu_qos_lpa_override(false);
+			ret = prcmu_qos_lpa_override(is_suspend);
 		} else {
-			ret = abb_codec_lpa_mode(false);
+			ret = abb_codec_lpa_mode(is_suspend, get_jack_type());
 		}
 	}
 	if (ret < 0) {
@@ -5774,7 +5786,9 @@ static ssize_t abb_codec_lpamode_show(struct kobject *kobj,
 {
 	sprintf(buf,   "Low-power-audio Mode\n\n");
 	sprintf(buf, "%sEnable [%s]\n\n", buf, lpa_mode_enabled ? "*" : " ");
-	sprintf(buf, "%sLPA Vape: %u uV (%#04x)\n\n", buf, vape_voltage(lpa_vape2), lpa_vape2);
+	sprintf(buf, "%sHeadset connected: [%s]\n\n", buf, get_jack_type() ? "*" : " ");
+	sprintf(buf, "%sLPA Vape for headset: %u uV (%#04x)\n\n", buf, vape_voltage(lpa_vape2_headset), lpa_vape2_headset);
+	sprintf(buf, "%sLPA Vape for speaker: %u uV (%#04x)\n\n", buf, vape_voltage(lpa_vape2_speaker), lpa_vape2_speaker);
 
 	return strlen(buf);
 }
@@ -5796,8 +5810,14 @@ static ssize_t abb_codec_lpamode_store(struct kobject *kobj,
 		return count;
 	}
 
-	if (sscanf(buf, "vape=%x", &val)) {
-		lpa_vape2 = val;
+	if (sscanf(buf, "vape_headset=%x", &val)) {
+		lpa_vape2_headset = val;
+
+		return count;
+	}
+	
+	if (sscanf(buf, "vape_speaker=%x", &val)) {
+		lpa_vape2_speaker = val;
 
 		return count;
 	}

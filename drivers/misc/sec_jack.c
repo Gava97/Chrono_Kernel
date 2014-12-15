@@ -134,6 +134,16 @@ static void set_Accdetection( struct device *dev, bool on )
 }
 #endif
 
+
+int detect_jack_type = 0;
+
+int get_jack_type(void)
+{
+	return detect_jack_type;
+}
+
+extern int jack_lpa_vape_override(int jack_type);
+
 static void sec_jack_set_type(struct sec_jack_info *hi, int jack_type)
 {
 	if (jack_type == hi->cur_jack_type) {
@@ -160,6 +170,9 @@ static void sec_jack_set_type(struct sec_jack_info *hi, int jack_type)
 	hi->cur_jack_type = jack_type;
 	jack_is_detected = hi->cur_jack_type;
 	pr_info("%s : jack_type = %d\n", __func__, jack_type);
+	
+	detect_jack_type = jack_type;
+	jack_lpa_vape_override(jack_type);
 
 	switch_set_state(&switch_jack_detection, jack_type);
 }
