@@ -876,8 +876,10 @@ static int abb_codec_lpa_mode(bool suspend, int jack_type)
 }
 
 int jack_lpa_vape_override(int jack_type) 
-{
-	abb_codec_lpa_mode(is_suspend, jack_type);
+{	if (lpa_mode_enabled)
+		return abb_codec_lpa_mode(is_suspend, jack_type);
+	else
+		return 1;
 }
 
 /* Reads an arbitrary register from the ab8500 chip.
