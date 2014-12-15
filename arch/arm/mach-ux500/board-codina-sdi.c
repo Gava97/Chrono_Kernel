@@ -221,7 +221,7 @@ static int sdi0_ios_handler(struct device *dev, struct mmc_ios *ios,  enum rpm_s
 static struct mmci_platform_data ssg_sdi0_data = {
 	.ios_handler	= sdi0_ios_handler,
 	.ocr_mask	= MMC_VDD_29_30,
-	.f_max		= 100000000,
+	.f_max		= 50000000,
 	.capabilities	= MMC_CAP_4_BIT_DATA |
 				MMC_CAP_SD_HIGHSPEED |
 				MMC_CAP_MMC_HIGHSPEED,
@@ -374,7 +374,7 @@ static void suspend_resume_handler_sdi2(struct mmc_host *host, bool suspend)
 
 static struct mmci_platform_data ssg_sdi2_data = {
 	.ocr_mask	= MMC_VDD_165_195,
-	.f_max		= 100000000,
+	.f_max		= 50000000,
 	.capabilities	= MMC_CAP_4_BIT_DATA |
 				MMC_CAP_8_BIT_DATA |
 				MMC_CAP_MMC_HIGHSPEED|
