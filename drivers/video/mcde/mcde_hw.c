@@ -4215,9 +4215,10 @@ static int __devinit mcde_probe(struct platform_device *pdev)
 	}
 
 	INIT_DELAYED_WORK_DEFERRABLE(&hw_timeout_work, work_sleep_function);
-
+/*
 	prcmu_qos_add_requirement(PRCMU_QOS_APE_OPP,
 		dev_name(&pdev->dev), PRCMU_QOS_MAX_VALUE);
+*/
 	prcmu_qos_add_requirement(PRCMU_QOS_DDR_OPP,
 		dev_name(&pdev->dev), PRCMU_QOS_DEFAULT_VALUE);
 	ret = probe_hw(pdev);
@@ -4254,8 +4255,10 @@ failed_irq_get:
 
 static int __devexit mcde_remove(struct platform_device *pdev)
 {
+/*
 	prcmu_qos_remove_requirement(PRCMU_QOS_APE_OPP,
 		dev_name(&pdev->dev));
+*/
 	prcmu_qos_remove_requirement(PRCMU_QOS_DDR_OPP,
 		dev_name(&pdev->dev));
 	remove_clocks_and_power(pdev);
