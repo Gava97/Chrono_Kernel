@@ -46,7 +46,6 @@
 #define PRCMU_PLLSOC0			0x0080
 
 #define PRCMU_SGACLK_INIT		0x00000021
-#define PRCMU_PLLSOC0_INIT		0x01030132
 
 #define AB8500_VAPE_SEL1 		0x0E
 #define AB8500_VAPE_SEL2	 	0x0F
@@ -54,9 +53,9 @@
 #define AB8500_VAPE_MIN_UV		700000
 #define AB8500_VAPE_MAX_UV		1362500
 
-#define MALI_CLOCK_DEFLO		4
-#define MALI_CLOCK_DEFHISPEED1		8
-#define MALI_CLOCK_DEFHISPEED2		11
+#define MALI_CLOCK_DEFLO		2
+#define MALI_CLOCK_DEFHISPEED1		4
+#define MALI_CLOCK_DEFHISPEED2		6
 
 #define MALI_HISPEED1_UTILIZATION_LIMIT 192
 #define MALI_HISPEED2_UTILIZATION_LIMIT 235
@@ -71,22 +70,22 @@ struct mali_dvfs_data
 };
 
 static struct mali_dvfs_data mali_dvfs[] = {
-	{128000, 0x01030114, 0x26},
-	{192000, 0x0103011e, 0x26},
-	{256000, 0x01030128, 0x26},
-	{320000, 0x01030132, 0x28},
-	{384000, 0x0103013c, 0x28},
-	{403200, 0x0103013f, 0x28},
-	{448000, 0x01030146, 0x2c},
-	{480000, 0x0103014b, 0x2c},
-	{512000, 0x01030150, 0x2c},
-	{576000, 0x0103015a, 0x36},
-	{601600, 0x0103015e, 0x39},
-	{640000, 0x01030164, 0x3f},
-	{672000, 0x01030169, 0x3f},
-	{704000, 0x0103016e, 0x3f},
-	{716800, 0x01030170, 0x3f},
+	{256000, 0x00050128, 0x26},
+	{322590, 0x0005012a, 0x28},
+	{399360, 0x00050134, 0x28},
+	{453120, 0x0005013B, 0x2c},
+	{499200, 0x00050141, 0x2c},
+	{552960, 0x00050148, 0x36},
+	{599040, 0x0005014E, 0x39},
+	{652800, 0x00050155, 0x3F},
+	{675840, 0x00050158, 0x3F},
+	{691200, 0x0005015A, 0x3F},
+	{706560, 0x0005015C, 0x3F},
+	{714240, 0x0005015D, 0x3F},
+
 };
+
+u32 init_idx = MALI_CLOCK_DEFLO;
 
 int mali_utilization_high_to_low;// unused now
 int mali_utilization_low_to_high;// leave it here to avoid compile errors
@@ -104,7 +103,7 @@ static bool is_running;
 static bool is_initialized;
 
 static bool is_delayed = true;
-static unsigned int start_delay = 15000;
+static unsigned int start_delay = 35000;
 
 static u32 mali_last_utilization;
 module_param(mali_last_utilization, uint, 0444);
@@ -129,7 +128,7 @@ static u32 boost_stat_total	= 0;
 
 static bool boost_scheduled = false;
 static bool unboost_scheduled = false;
-static unsigned int boost_delay = 200;
+static unsigned int boost_delay = 300;
 
 static struct delayed_work start_delay_work; // delay after mali initialization
 static struct delayed_work mali_boost_delayedwork;
@@ -160,6 +159,7 @@ int get_prev_cpufreq(void) {
 
 static void start_delay_fn(struct work_struct *work)
 {
+	prcmu_qos_update_requirement(PRCMU_QOS_APE_OPP, "mali", PRCMU_QOS_DEFAULT_VALUE);
 	is_delayed = false;
 }
 
@@ -199,15 +199,17 @@ static int sgaclk_freq(void)
 		return 0;
 
 	div = (sgaclk & 0xf);
-	if (!div) div = 1;
-	
+
 	return (pllsoc0_freq(soc0pll) / div);
 }
 
 static int mali_freq_up(void)
 {
 	u8 vape;
-	u32 pll;
+	u32 prev_pll, pll, new_pll;
+	
+	if (is_delayed)
+		return -1;
 	
 	if (min_cpufreq_forced_to_max) {
 		set_min_cpufreq(prev_min_cpufreq); // unlock cpufreq on every gpu_freq_down
@@ -215,18 +217,23 @@ static int mali_freq_up(void)
 	}
 
 	if (boost_cur < boost_hispeed2) {
+		prev_pll = mali_dvfs[boost_cur].clkpll;
+	  
 		if (boost_cur == boost_low)
 			boost_cur = boost_hispeed1;
 		else
 			boost_cur = boost_hispeed2;
 		
-		vape = mali_dvfs[boost_cur].vape_raw;
-		pll = mali_dvfs[boost_cur].clkpll;
+		pr_err("[mali] boost to %d kHz\n", pllsoc0_freq(mali_dvfs[boost_cur].clkpll));
 		
-		udelay(500);
+		vape = mali_dvfs[boost_cur].vape_raw;
+		new_pll = mali_dvfs[boost_cur].clkpll;
+		
 		prcmu_abb_write(AB8500_REGU_CTRL2, AB8500_VAPE_SEL1, &vape, 1);
-		udelay(500);
-		prcmu_write(PRCMU_PLLSOC0, pll);
+		for (pll = prev_pll; pll <= new_pll; ++pll) {
+			prcmu_write(PRCMU_PLLSOC0, pll);
+			udelay(200);
+		}
 		
 		return 1;
 	} else {	  
@@ -237,7 +244,10 @@ static int mali_freq_up(void)
 static int mali_freq_down(void)
 {
 	u8 vape;
-	u32 pll;
+	u32 prev_pll, pll, new_pll;
+	
+	if (is_delayed)
+		return -1;
 	
 	if (min_cpufreq_forced_to_max) {
 		set_min_cpufreq(prev_min_cpufreq); // unlock cpufreq on every gpu_freq_down
@@ -245,17 +255,22 @@ static int mali_freq_down(void)
 	}
 
 	if (boost_cur > boost_low) {
+		prev_pll = mali_dvfs[boost_cur].clkpll;
+	  
 		if (boost_cur == boost_hispeed2)
 			boost_cur = boost_hispeed1;
 		else
 			boost_cur = boost_low;
 		
-		vape = mali_dvfs[boost_cur].vape_raw;
-		pll = mali_dvfs[boost_cur].clkpll;
+		pr_err("[mali] unboost to %d kHz\n", pllsoc0_freq(mali_dvfs[boost_cur].clkpll));
 		
-		udelay(500);
-		prcmu_write(PRCMU_PLLSOC0, pll);
-		udelay(500);
+		vape = mali_dvfs[boost_cur].vape_raw;
+		new_pll = mali_dvfs[boost_cur].clkpll;
+		
+		for (pll = prev_pll; pll <= new_pll; --pll) {
+			prcmu_write(PRCMU_PLLSOC0, pll);
+			udelay(200);
+		}
 		prcmu_abb_write(AB8500_REGU_CTRL2, AB8500_VAPE_SEL1, &vape, 1);
 		
 		return 1;
@@ -281,11 +296,11 @@ static void mali_clock_apply(u32 idx)
 
 	vape = mali_dvfs[idx].vape_raw;
 	pll = mali_dvfs[idx].clkpll;
-
+	
 	prcmu_abb_write(AB8500_REGU_CTRL2, 
-		AB8500_VAPE_SEL1, 
-		&vape, 
-		1);
+			AB8500_VAPE_SEL1, 
+			&vape, 
+			1);
 	prcmu_write(PRCMU_PLLSOC0, pll);
 }
 
@@ -952,8 +967,11 @@ _mali_osk_errcode_t mali_platform_init()
 
 	if (!is_initialized) {
 
-		prcmu_write(PRCMU_PLLSOC0, PRCMU_PLLSOC0_INIT);
+		mali_clock_apply(init_idx);
+		pr_err("[mali] init soc0pll: %#010x\n", mali_dvfs[init_idx].clkpll);
 		prcmu_write(PRCMU_SGACLK,  PRCMU_SGACLK_INIT);
+		pr_err("[mali] init sgaclk: %#010x\n", PRCMU_SGACLK_INIT);
+		prcmu_qos_update_requirement(PRCMU_QOS_APE_OPP, "mali", PRCMU_QOS_MAX_VALUE);
 		mali_boost_init();
 
 		mali_utilization_workqueue = create_singlethread_workqueue("mali_utilization_workqueue");
