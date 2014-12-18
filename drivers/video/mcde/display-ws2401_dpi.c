@@ -875,6 +875,53 @@ static const struct backlight_ops ws2401_dpi_backlight_ops  = {
 	.update_status = ws2401_dpi_set_brightness,
 };
 
+static signed char apeopp_requirement = 50, ddropp_requirement = 50;
+
+static ssize_t ws2401_sysfs_show_opp(struct device *dev,
+				      struct device_attribute *attr, char *buf)
+{
+	return sprintf(buf, "apeopp=%d\n"
+			    "ddropp=%d\n",
+			    apeopp_requirement,
+			    ddropp_requirement);
+}
+
+static ssize_t ws2401_sysfs_store_opp(struct device *dev,
+				       struct device_attribute *attr,
+				       const char *buf, size_t len)
+{
+	int val;
+  
+  	if (!strncmp(&buf[0], "apeopp=", 7))
+	{
+		sscanf(&buf[7], "%d", &val);
+		
+		if ((val != 25) && (val != 50) && (val != 100))
+			goto out;
+		
+		apeopp_requirement = val;
+
+		return len;
+	}
+	
+	if (!strncmp(&buf[0], "ddropp=", 7))
+	{
+		sscanf(&buf[7], "%d", &val);
+		
+		if ((val != 25) && (val != 50) && (val != 100))
+			goto out;
+		
+		apeopp_requirement = val;
+
+		return len;
+	}
+	
+out:
+	return -EINVAL;
+}
+static DEVICE_ATTR(mcde_screenon_opp, 0644,
+		ws2401_sysfs_show_opp, ws2401_sysfs_store_opp);
+
 static ssize_t ws2401_sysfs_show_mcde_chnl(struct device *dev,
 				      struct device_attribute *attr, char *buf)
 {
@@ -1371,6 +1418,10 @@ static int __devinit ws2401_dpi_mcde_probe(
 	ret = device_create_file(&(ddev->dev), &dev_attr_mcde_chnl);
 	if (ret < 0)
 		dev_err(&(ddev->dev), "failed to add sysfs entries\n");
+	
+	ret = device_create_file(&(ddev->dev), &dev_attr_mcde_screenon_opp);
+	if (ret < 0)
+		dev_err(&(ddev->dev), "failed to add sysfs entries\n");
 
 	lcd->spi_drv.driver.name	= "pri_lcd_spi";
 	lcd->spi_drv.driver.bus		= &spi_bus_type;
@@ -1388,6 +1439,16 @@ static int __devinit ws2401_dpi_mcde_probe(
 	lcd->earlysuspend.resume  = ws2401_dpi_mcde_late_resume;
 	register_early_suspend(&lcd->earlysuspend);
 #endif
+	
+	if (prcmu_qos_add_requirement(PRCMU_QOS_APE_OPP,
+			"codina_lcd_dpi", apeopp_requirement)) {
+			pr_info("pcrm_qos_add APE failed\n");
+	}
+	
+	if (prcmu_qos_add_requirement(PRCMU_QOS_DDR_OPP,
+			"codina_lcd_dpi", ddropp_requirement)) {
+			pr_info("pcrm_qos_add APE failed\n");
+	}
 
 	dev_dbg(&ddev->dev, "DPI display probed\n");
 
@@ -1498,6 +1559,16 @@ static void ws2401_dpi_mcde_early_suspend(
 						struct ws2401_dpi,
 						earlysuspend);
 	pm_message_t dummy;
+	
+	if (prcmu_qos_add_requirement(PRCMU_QOS_APE_OPP,
+			"codina_lcd_dpi", apeopp_requirement)) {
+			pr_info("pcrm_qos_add APE failed\n");
+	}
+	
+	if (prcmu_qos_add_requirement(PRCMU_QOS_DDR_OPP,
+			"codina_lcd_dpi", ddropp_requirement)) {
+			pr_info("pcrm_qos_add APE failed\n");
+	}
 
 	#ifdef ESD_OPERATION
 	if (lcd->esd_enable) {
@@ -1548,6 +1619,9 @@ static void ws2401_dpi_mcde_late_resume(
 	} else
 		pr_info("%s lcd_connected : %d", __func__, lcd->lcd_connected);
 	#endif
+		
+	prcmu_qos_remove_requirement(PRCMU_QOS_APE_OPP, "codina_lcd_dpi");
+	prcmu_qos_remove_requirement(PRCMU_QOS_DDR_OPP, "codina_lcd_dpi");
 }
 #endif
 

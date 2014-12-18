@@ -940,6 +940,53 @@ static const struct backlight_ops s6d27a1_dpi_backlight_ops  = {
 	.update_status = s6d27a1_dpi_set_brightness,
 };
 
+static signed char apeopp_requirement = 50, ddropp_requirement = 50;
+
+static ssize_t s6d27a1_sysfs_show_opp(struct device *dev,
+				      struct device_attribute *attr, char *buf)
+{
+	return sprintf(buf, "apeopp=%d\n"
+			    "ddropp=%d\n",
+			    apeopp_requirement,
+			    ddropp_requirement);
+}
+
+static ssize_t s6d27a1_sysfs_store_opp(struct device *dev,
+				       struct device_attribute *attr,
+				       const char *buf, size_t len)
+{
+	int val;
+  
+  	if (!strncmp(&buf[0], "apeopp=", 7))
+	{
+		sscanf(&buf[7], "%d", &val);
+		
+		if ((val != 25) && (val != 50) && (val != 100))
+			goto out;
+		
+		apeopp_requirement = val;
+
+		return len;
+	}
+	
+	if (!strncmp(&buf[0], "ddropp=", 7))
+	{
+		sscanf(&buf[7], "%d", &val);
+		
+		if ((val != 25) && (val != 50) && (val != 100))
+			goto out;
+		
+		apeopp_requirement = val;
+
+		return len;
+	}
+	
+out:
+	return -EINVAL;
+}
+static DEVICE_ATTR(mcde_screenon_opp, 0644,
+		 s6d27a1_sysfs_show_opp,  s6d27a1_sysfs_store_opp);
+
 static ssize_t s6d27a1_sysfs_show_lcdclk(struct device *dev,
 	struct device_attribute *attr, char *buf)
 {
@@ -1124,6 +1171,16 @@ static int __devinit s6d27a1_dpi_spi_probe(struct spi_device *spi)
 
 	dev_info(lcd->dev, "esd work success\n");
 
+	if (prcmu_qos_add_requirement(PRCMU_QOS_APE_OPP,
+			"codina_lcd_dpi", apeopp_requirement)) {
+			pr_info("pcrm_qos_add APE failed\n");
+	}
+	
+	if (prcmu_qos_add_requirement(PRCMU_QOS_DDR_OPP,
+			"codina_lcd_dpi", ddropp_requirement)) {
+			pr_info("pcrm_qos_add APE failed\n");
+	}
+	
 #ifdef ESD_TEST
 	pdpi = lcd;
 	setup_timer(&lcd->esd_test_timer, est_test_timer_func, 0);
@@ -1225,6 +1282,11 @@ static int __devinit s6d27a1_dpi_mcde_probe(
 	ret = device_create_file(&(ddev->dev), &dev_attr_lcdclk);
 	if (ret < 0)
 		dev_err(&(ddev->dev), "failed to add sysfs entries\n");
+	
+	ret = device_create_file(&(ddev->dev), &dev_attr_mcde_screenon_opp);
+	if (ret < 0)
+		dev_err(&(ddev->dev), "failed to add sysfs entries\n");
+
 
 	lcd->spi_drv.driver.name	= "pri_lcd_spi";
 	lcd->spi_drv.driver.bus		= &spi_bus_type;
@@ -1360,6 +1422,15 @@ static void s6d27a1_dpi_mcde_early_suspend(
 	struct s6d27a1_dpi *lcd = container_of(earlysuspend,
 						struct s6d27a1_dpi,
 						earlysuspend);
+	if (prcmu_qos_add_requirement(PRCMU_QOS_APE_OPP,
+			"codina_lcd_dpi", apeopp_requirement)) {
+			pr_info("pcrm_qos_add APE failed\n");
+	}
+	
+	if (prcmu_qos_add_requirement(PRCMU_QOS_DDR_OPP,
+			"codina_lcd_dpi", ddropp_requirement)) {
+			pr_info("pcrm_qos_add APE failed\n");
+	}
 	
 	#ifdef CONFIG_DB8500_LIVEOPP
 	schedule_work(&requirements_remove_work);
@@ -1388,6 +1459,9 @@ static void s6d27a1_dpi_mcde_late_resume(
 		pr_err("[s6d27a1] Rebasing LCDCLK...\n");
 		schedule_work(&s6d27a1_lcdclk_work);
 	}
+	
+	prcmu_qos_remove_requirement(PRCMU_QOS_APE_OPP, "codina_lcd_dpi");
+	prcmu_qos_remove_requirement(PRCMU_QOS_DDR_OPP, "codina_lcd_dpi");
 
 }
 #endif
