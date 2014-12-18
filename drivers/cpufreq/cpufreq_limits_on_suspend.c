@@ -72,21 +72,6 @@ bool is_suspended_get(void) {
 }
 EXPORT_SYMBOL(is_suspended_get);
 
-static void requirements_add_thread(struct work_struct *requirements_add_work)
-{
-	if (prcmu_qos_add_requirement(PRCMU_QOS_APE_OPP,
-			"codina_lcd_dpi", 50)) {
-		pr_info("pcrm_qos_add APE failed\n");
-	}
-}
-static DECLARE_WORK(requirements_add_work, requirements_add_thread);
-
-static void requirements_remove_thread(struct work_struct *requirements_remove_work)
-{
-	prcmu_qos_remove_requirement(PRCMU_QOS_APE_OPP, "codina_lcd_dpi");
-}
-static DECLARE_WORK(requirements_remove_work, requirements_remove_thread);
-
 int get_max_cpufreq(void) {
 	struct cpufreq_policy *policy = cpufreq_cpu_get(0);
 	
@@ -142,12 +127,10 @@ static struct work_struct late_resume_work;
 static void early_suspend_fn(struct early_suspend *handler)
 {
 	schedule_work(&early_suspend_work);
-	schedule_work(&requirements_remove_work);
 }
 
 static void late_resume_fn(struct early_suspend *handler)
 {
-	schedule_work(&requirements_add_work);
 	schedule_work(&late_resume_work);
 }
 
