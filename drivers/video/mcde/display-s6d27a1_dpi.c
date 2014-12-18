@@ -965,6 +965,8 @@ static ssize_t s6d27a1_sysfs_store_opp(struct device *dev,
 			goto out;
 		
 		apeopp_requirement = val;
+		prcmu_qos_update_requirement(PRCMU_QOS_APE_OPP,
+			"codina_lcd_dpi", apeopp_requirement);
 
 		return len;
 	}
@@ -976,7 +978,9 @@ static ssize_t s6d27a1_sysfs_store_opp(struct device *dev,
 		if ((val != 25) && (val != 50) && (val != 100))
 			goto out;
 		
-		apeopp_requirement = val;
+		ddropp_requirement = val;
+		prcmu_qos_update_requirement(PRCMU_QOS_DDR_OPP,
+			"codina_lcd_dpi", ddropp_requirement);
 
 		return len;
 	}
