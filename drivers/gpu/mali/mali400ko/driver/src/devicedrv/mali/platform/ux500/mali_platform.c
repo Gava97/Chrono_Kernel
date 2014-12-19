@@ -180,6 +180,11 @@ static int pllsoc0_freq(u32 raw)
 	int pll;
 
 	pll = (multiple * 38400);
+	if (!divider) {
+		pr_err("[mali] bad divider 0, pll=%#010x\n");
+		return 0;
+	}
+	
 	pll /= divider;
 
 	if (half) {
@@ -207,6 +212,7 @@ static int mali_freq_up(void)
 {
 	u8 vape;
 	u32 pll;
+	int freq;
 	
 	if (min_cpufreq_forced_to_max) {
 		set_min_cpufreq(prev_min_cpufreq); // unlock cpufreq on every gpu_freq_down
@@ -219,10 +225,17 @@ static int mali_freq_up(void)
 		else
 			boost_cur = boost_hispeed2;
 		
-		pr_err("[mali] boost to %d kHz\n", pllsoc0_freq(mali_dvfs[boost_cur].clkpll));
+		freq = pllsoc0_freq(mali_dvfs[boost_cur].clkpll);
 		
 		vape = mali_dvfs[boost_cur].vape_raw;
 		pll = mali_dvfs[boost_cur].clkpll;
+		
+		if (!pll || !freq) {	
+			pr_err("[mali] bad pll, refusing boost, current pll=%#010x\n", prcmu_read(PRCMU_PLLSOC0));
+			return -1;
+		}
+		
+		pr_err("[mali] boost to %d kHz\n", freq);
 		
 		prcmu_abb_write(AB8500_REGU_CTRL2, AB8500_VAPE_SEL1, &vape, 1);
 		prcmu_write(PRCMU_PLLSOC0, pll);
@@ -237,6 +250,7 @@ static int mali_freq_down(void)
 {
 	u8 vape;
 	u32 pll;
+	int freq;
 	
 	if (min_cpufreq_forced_to_max) {
 		set_min_cpufreq(prev_min_cpufreq); // unlock cpufreq on every gpu_freq_down
@@ -249,7 +263,14 @@ static int mali_freq_down(void)
 		else
 			boost_cur = boost_low;
 		
-		pr_err("[mali] unboost to %d kHz\n", pllsoc0_freq(mali_dvfs[boost_cur].clkpll));
+		freq = pllsoc0_freq(mali_dvfs[boost_cur].clkpll);
+				
+		if (!pll || !freq) {
+			pr_err("[mali] bad pll, refusing boost, current pll=%#010x\n", prcmu_read(PRCMU_PLLSOC0));
+			return -1;
+		}
+		
+		pr_err("[mali] unboost to %d kHz\n", freq);
 		
 		vape = mali_dvfs[boost_cur].vape_raw;
 		pll = mali_dvfs[boost_cur].clkpll;
