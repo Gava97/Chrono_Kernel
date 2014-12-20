@@ -459,7 +459,7 @@ void mali_utilization_function(struct work_struct *ptr)
 	if (boost_cur == boost_hispeed1) {	
 		if (mali_last_utilization > ddr_50_opp_utilization_limit) {
 			if (mali_last_utilization > ddr_100_opp_utilization_limit)
-				prcmu_qos_update_requirement(PRCMU_QOS_DDR_OPP, "mali", PRCMU_QOS_MAX_VALUE);
+			      prcmu_qos_update_requirement(PRCMU_QOS_DDR_OPP, "mali", PRCMU_QOS_MAX_VALUE);
 			else
 			      prcmu_qos_update_requirement(PRCMU_QOS_DDR_OPP, "mali", (signed char) 50);
 		else 
@@ -762,8 +762,10 @@ static ssize_t mali_boost_low_store(struct kobject *kobj, struct kobj_attribute 
 		if (val >= ARRAY_SIZE(mali_dvfs))
 			return -EINVAL;
 
+		if (boost_cur == boost_low)
+			boost_cur = val;
+		
 		boost_low = val;
-		boost_cur = val;
 		mali_clock_apply(boost_low);
 
 		return count;
@@ -812,7 +814,10 @@ static ssize_t mali_boost_hispeed_store(struct kobject *kobj, struct kobj_attrib
 	if (sscanf(buf, "idx=%u", &val)) {
 		if (val >= ARRAY_SIZE(mali_dvfs))
 			return -EINVAL;
-
+		
+		if (boost_cur == boost_hispeed1)
+			boost_cur = val;
+		
 		boost_hispeed1 = val;
 
 		return count;
@@ -858,6 +863,9 @@ static ssize_t mali_boost_hispeed2_store(struct kobject *kobj, struct kobj_attri
 	if (sscanf(buf, "idx=%u", &val)) {
 		if (val >= ARRAY_SIZE(mali_dvfs))
 			return -EINVAL;
+		
+		if (boost_cur == boost_hispeed2)
+			boost_cur = val;
 
 		boost_hispeed2 = val;
 
