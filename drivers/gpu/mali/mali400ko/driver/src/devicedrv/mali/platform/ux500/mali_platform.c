@@ -60,7 +60,6 @@
 #define MALI_APE50OPP_UTILIZATION_LIMIT 50
 #define MALI_APE100OPP_UTILIZATION_LIMIT 100
 #define MALI_DDR50OPP_UTILIZATION_LIMIT 100
-#define MALI_DDR100OPP_UTILIZATION_LIMIT 160
 #define MALI_HISPEED1_UTILIZATION_LIMIT 192
 #define MALI_HISPEED2_UTILIZATION_LIMIT 235
 #define HI2_TO_HI1_UTILIZATION_LIMIT 64
@@ -242,6 +241,11 @@ static int mali_freq_up(void)
 		
 		if (!pll || !freq) {	
 			pr_err("[mali] bad pll=%#010x, refusing boost (cur=%d)\n", pll, boost_cur);
+			return -1;
+		}
+		
+		if (prcmu_get_ape_opp() != APE_100_OPP) {
+			pr_err("[mali] boost refused, APE_OPP!=100");
 			return -1;
 		}
 		
@@ -446,12 +450,22 @@ void mali_utilization_function(struct work_struct *ptr)
 	
 	mutex_lock(&mali_boost_lock);
 	
-	if (mali_last_utilization > ddr_100_opp_utilization_limit) {
-		prcmu_qos_update_requirement(PRCMU_QOS_DDR_OPP, "mali", PRCMU_QOS_MAX_VALUE);
-	} else if (mali_last_utilization > ddr_50_opp_utilization_limit) {
-		if (boost_cur != boost_hispeed2)
+	if (mali_last_utilization > ddr_50_opp_utilization_limit) {
+		/* if we are in boost condition and DDR_OPP=100, don't set DDR_50_OPP */
+		if (!((boost_cur != boost_low) && (prcmu_get_ddr_opp() == DDR_100_OPP)))
 			prcmu_qos_update_requirement(PRCMU_QOS_DDR_OPP, "mali", (signed char) 50);
 	}
+	
+	if (boost_cur == boost_hispeed1) {	
+		if (mali_last_utilization > ddr_50_opp_utilization_limit) {
+			if (mali_last_utilization > ddr_100_opp_utilization_limit)
+				prcmu_qos_update_requirement(PRCMU_QOS_DDR_OPP, "mali", PRCMU_QOS_MAX_VALUE);
+			else
+			      prcmu_qos_update_requirement(PRCMU_QOS_DDR_OPP, "mali", (signed char) 50);
+		else 
+			prcmu_qos_update_requirement(PRCMU_QOS_DDR_OPP, "mali", PRCMU_QOS_DEFAULT_VALUE);
+	} else if (boost_cur == boost_hispeed2)
+		prcmu_qos_update_requirement(PRCMU_QOS_DDR_OPP, "mali", PRCMU_QOS_MAX_VALUE);
 	
 	if (mali_last_utilization > ape_100_opp_utilization_limit) {
 		prcmu_qos_update_requirement(PRCMU_QOS_APE_OPP, "mali", PRCMU_QOS_MAX_VALUE);
