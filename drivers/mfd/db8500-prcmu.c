@@ -1222,22 +1222,23 @@ static struct liveopp_arm_table liveopp_arm[] = {
 /* table for others */
 static struct liveopp_arm_table liveopp_arm[] = {
 //	| CLK            | PLL       | VDD | VBB | DDR | APE |
-	{ 200000,  199680, 0x0005011A, 0x18, 0xDB, 25, 25},
-	{ 250000,  253440, 0x00050121, 0x18, 0xDB, 25, 25},
-	{ 300000,  299520, 0x00050127, 0x18, 0xDB, 25, 25},
-	{ 350000,  353280, 0x0005012E, 0x18, 0xDB, 25, 25},
-	{ 400000,  399360, 0x00050134, 0x18, 0xDB, 50, 25},
-	{ 450000,  453120, 0x0005013B, 0x20, 0xDB, 50, 25},
-	{ 500000,  499200, 0x00050141, 0x20, 0xDB, 50, 25},
-	{ 550000,  552960, 0x00050148, 0x20, 0xDB, 50, 25},
-	{ 600000,  599040, 0x0005014E, 0x20, 0xDB, 50, 25},
-	{ 700000,  698880, 0x0005015B, 0x24, 0xDB, 50, 25},
-	{ 800000,  798720, 0x00050168, 0x24, 0xDB, 50, 25},
-	{1000000,  998400, 0x00050182, 0x31, 0x8F, 100, 25},
-	{1100000, 1098240, 0x0005018F, 0x36, 0x8F, 100, 25},
-	{1150000, 1152000, 0x00050196, 0x36, 0x8F, 100, 25},
-	{1200000, 1198080, 0x0005019C, 0x37, 0x9F, 100, 25},
-	{1230000, 1228800, 0x000501A0, 0x3F, 0x9F, 100, 25},
+	{ 200000,  199680, 0x0005011A, 0x18, 0xDB,  25,  25},
+	{ 250000,  253440, 0x00050121, 0x18, 0xDB,  25,  25},
+	{ 300000,  299520, 0x00050127, 0x18, 0xDB,  25,  50},
+	{ 350000,  353280, 0x0005012E, 0x18, 0xDB,  25,  50},
+	{ 400000,  399360, 0x00050134, 0x18, 0xDB,  50,  50},
+	{ 450000,  453120, 0x0005013B, 0x20, 0xDB,  50,  50},
+	{ 500000,  499200, 0x00050141, 0x20, 0xDB,  50,  50},
+	{ 550000,  552960, 0x00050148, 0x20, 0xDB,  50,  50},
+	{ 600000,  599040, 0x0005014E, 0x20, 0xDB,  50,  50},
+	{ 700000,  698880, 0x0005015B, 0x24, 0xDB,  50,  50},
+	{ 800000,  798720, 0x00050168, 0x24, 0xDB, 100,  50},
+	{1000000,  998400, 0x00050182, 0x31, 0x8F, 100,  50},
+	{1100000, 1098240, 0x0005018F, 0x36, 0x8F, 100,  50},
+	{1150000, 1152000, 0x00050196, 0x36, 0x8F, 100,  50},
+	{1200000, 1198080, 0x0005019C, 0x37, 0x8F, 100,  50},
+	{1230000, 1228800, 0x000501A0, 0x38, 0x8F, 100,  50},
+	{1245000, 1244160, 0x000501A2, 0x38, 0x8F, 100,  50},
 };
 #endif
 
@@ -1252,69 +1253,6 @@ static const char *armopp_name[] =
 	"(null)",		/* 0x06 */
 	"ARM_EXTCLK",		/* 0x07 */
 };
-
-// symbols for extreme OC
-//extern int get_max_cpufreq(void);
-static bool unboost_scheduled = false;
-static bool boost_scheduled = false;
-//static bool extreme_oc = false;
-static unsigned int extreme_oc_step = 15;
-static unsigned int unboost_freq_step = 14;
-static unsigned int extreme_oc_delay_ms = 15;
-static unsigned int uv_latency_us = 80;
-static struct delayed_work extreme_oc_boost_work;
-static struct delayed_work extreme_oc_unboost_work;
-
-static void extreme_oc_boost_fn(struct work_struct* extreme_oc_boost_work) {
-	struct liveopp_arm_table table = liveopp_arm[extreme_oc_step];
-  
-	u8 vdd;
-	u8 vbb;
-	bool update_vdd;
-	bool update_vbb;
-
-	prcmu_abb_read(AB8500_REGU_CTRL2, AB8500_VARM_SEL1, &vdd, 1);
-	prcmu_abb_read(AB8500_REGU_CTRL2, AB8500_VBBX_REG,  &vbb, 1);
-
-	update_vdd = (table.varm_raw != vdd) ? 1 : 0;
-	update_vbb = (table.vbbx_raw != vbb) ? 1 : 0;
-	if (update_vbb)
-		prcmu_abb_write(AB8500_REGU_CTRL2, AB8500_VBBX_REG,  &table.vbbx_raw, 1);
-	if (update_vdd)
-		prcmu_abb_write(AB8500_REGU_CTRL2, AB8500_VARM_SEL1, &table.varm_raw, 1);
-
-	udelay(uv_latency_us);
-	mb();
-	db8500_prcmu_writel(PRCMU_PLLARM_REG, table.pllarm_raw);
-}
-static DECLARE_DELAYED_WORK(extreme_oc_boost_work, extreme_oc_boost_fn);
-
-static void extreme_oc_unboost_fn(struct work_struct* extreme_oc_unboost_work) {
-	struct liveopp_arm_table table = liveopp_arm[unboost_freq_step];
-  
-	u8 vdd;
-	u8 vbb;
-	bool update_vdd;
-	bool update_vbb;
-
-	prcmu_abb_read(AB8500_REGU_CTRL2, AB8500_VARM_SEL1, &vdd, 1);
-	prcmu_abb_read(AB8500_REGU_CTRL2, AB8500_VBBX_REG,  &vbb, 1);
-
-	update_vdd = (table.varm_raw != vdd) ? 1 : 0;
-	update_vbb = (table.vbbx_raw != vbb) ? 1 : 0;
-	mb();
-	db8500_prcmu_writel(PRCMU_PLLARM_REG, table.pllarm_raw);
-	
-	udelay(uv_latency_us / 2);
-
-	if (update_vdd)
-		prcmu_abb_write(AB8500_REGU_CTRL2, AB8500_VARM_SEL1, &table.varm_raw, 1);
-	if (update_vbb)
-		prcmu_abb_write(AB8500_REGU_CTRL2, AB8500_VBBX_REG,  &table.vbbx_raw, 1);
-
-	udelay(uv_latency_us / 2);
-}
-static DECLARE_DELAYED_WORK(extreme_oc_unboost_work, extreme_oc_unboost_fn);
 
 /*
  * FIXME:
@@ -1575,44 +1513,27 @@ static inline void liveopp_update_cpuhw(struct liveopp_arm_table table,
 	update_vbb = (table.vbbx_raw != vbb) ? 1 : 0;
 
 	if (last_idx < next_idx) {
-		if (next_idx != extreme_oc_step) {
-			if (update_vbb)
-				prcmu_abb_write(AB8500_REGU_CTRL2, AB8500_VBBX_REG,  &table.vbbx_raw, 1);
-			if (update_vdd)
-				prcmu_abb_write(AB8500_REGU_CTRL2, AB8500_VARM_SEL1, &table.varm_raw, 1);
 
-			udelay(uv_latency_us);
-			mb();
-			db8500_prcmu_writel(PRCMU_PLLARM_REG, table.pllarm_raw);
-		} else {
-			if (unboost_scheduled)
-				cancel_delayed_work(&extreme_oc_unboost_work);
-			
-			schedule_delayed_work(&extreme_oc_boost_work, msecs_to_jiffies(extreme_oc_delay_ms));
-			boost_scheduled = true;
-			unboost_scheduled = false;
-		}
+		if (update_vbb)
+			prcmu_abb_write(AB8500_REGU_CTRL2, AB8500_VBBX_REG,  &table.vbbx_raw, 1);
+		if (update_vdd)
+			prcmu_abb_write(AB8500_REGU_CTRL2, AB8500_VARM_SEL1, &table.varm_raw, 1);
+
+		udelay(80);
+		mb();
+		db8500_prcmu_writel(PRCMU_PLLARM_REG, table.pllarm_raw);
 
 	} else {
-		if (last_idx != extreme_oc_step) {
-			mb();
-			db8500_prcmu_writel(PRCMU_PLLARM_REG, table.pllarm_raw);
-			udelay(uv_latency_us / 2);
+		mb();
+		db8500_prcmu_writel(PRCMU_PLLARM_REG, table.pllarm_raw);
+		udelay(40);
 
-			if (update_vdd)
-				prcmu_abb_write(AB8500_REGU_CTRL2, AB8500_VARM_SEL1, &table.varm_raw, 1);
-			if (update_vbb)
-				prcmu_abb_write(AB8500_REGU_CTRL2, AB8500_VBBX_REG,  &table.vbbx_raw, 1);
+		if (update_vdd)
+			prcmu_abb_write(AB8500_REGU_CTRL2, AB8500_VARM_SEL1, &table.varm_raw, 1);
+		if (update_vbb)
+			prcmu_abb_write(AB8500_REGU_CTRL2, AB8500_VBBX_REG,  &table.vbbx_raw, 1);
 
-			udelay(uv_latency_us / 2);
-		} else {
-			if (boost_scheduled)
-				cancel_delayed_work(&extreme_oc_boost_work);
-			
-			schedule_delayed_work(&extreme_oc_unboost_work, msecs_to_jiffies(extreme_oc_delay_ms));
-			unboost_scheduled = true;
-			boost_scheduled = false;
-		}
+		udelay(40);
 	}
 
 	curr_table = table;
@@ -1885,7 +1806,7 @@ ARM_STEP(arm_step12, 12);
 ARM_STEP(arm_step13, 13);
 ARM_STEP(arm_step14, 14);
 ARM_STEP(arm_step15, 15);
-//ARM_STEP(arm_step16, 16);
+ARM_STEP(arm_step16, 16);
 
 #if CONFIG_LIVEOPP_DEBUG > 1
 static ssize_t liveopp_start_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)		
@@ -1900,65 +1821,6 @@ static ssize_t liveopp_start_store(struct kobject *kobj, struct kobj_attribute *
 }
 ATTR_RW(liveopp_start);
 #endif
-
-static ssize_t extreme_oc_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
-{
-	sprintf(buf, "%sboost_step=%d\n", buf,  extreme_oc_step);
-	sprintf(buf, "%sunboost_step=%d\n", buf,  unboost_freq_step);
-	sprintf(buf, "%sdelay=%d\n", buf,  extreme_oc_delay_ms);
-	sprintf(buf, "%suv_latency=%d\n", buf,  uv_latency_us);
-	
-	sprintf(buf, "%sboost_scheduled: %s\n", buf,  
-			boost_scheduled ? "true" : "false");
-	sprintf(buf, "%sunboost_scheduled: %s\n", buf,  
-			unboost_scheduled ? "true" : "false");
-	
-	return strlen(buf);
-}
-
-static ssize_t extreme_oc_store(struct kobject *kobj, struct kobj_attribute *attr, const char *buf, size_t count)
-{
-	int val;
-	
-	if (!strncmp(&buf[0], "boost_step=", 11)) {
-		if (!sscanf(&buf[11], "%d", &val))
-			  return -EINVAL;
-			
-		extreme_oc_step = val;
-			
-		return count;
-	}
-	
-	if (!strncmp(&buf[0], "unboost_step=", 13)) {
-		if (sscanf(&buf[13], "%d", &val))
-			return -EINVAL;
-		
-		unboost_freq_step = val;
-			
-		return count;
-	}
-	
-	if (!strncmp(&buf[0], "delay=", 6)) {
-		if (!sscanf(&buf[6], "%d", &val))
-			  return -EINVAL;
-			
-		extreme_oc_delay_ms = val;
-			
-		return count;
-	}
-	
-	if (!strncmp(&buf[0], "uv_latency=", 11)) {
-		if (!sscanf(&buf[11], "%d", &val))
-			  return -EINVAL;
-			
-		uv_latency_us = val;
-			
-		return count;
-	}
-	
-	return -EINVAL;
-}
-ATTR_RW(extreme_oc);
 
 static ssize_t pllddr_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
 {
@@ -2106,8 +1968,7 @@ static struct attribute *liveopp_attrs[] = {
 	&arm_step13_interface.attr, 
 	&arm_step14_interface.attr, 
 	&arm_step15_interface.attr, 
-	//&arm_step16_interface.attr, 
-	&extreme_oc_interface.attr,
+	&arm_step16_interface.attr, 
 	&pllddr_interface.attr, 
 	&pllddr_cross_clocks_interface.attr,
 	NULL,
