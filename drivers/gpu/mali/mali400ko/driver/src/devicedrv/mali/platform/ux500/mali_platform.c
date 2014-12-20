@@ -60,6 +60,7 @@
 #define MALI_APE50OPP_UTILIZATION_LIMIT 50
 #define MALI_APE100OPP_UTILIZATION_LIMIT 100
 #define MALI_DDR50OPP_UTILIZATION_LIMIT 100
+#define MALI_DDR100OPP_UTILIZATION_LIMIT 235
 #define MALI_HISPEED1_UTILIZATION_LIMIT 192
 #define MALI_HISPEED2_UTILIZATION_LIMIT 235
 #define HI2_TO_HI1_UTILIZATION_LIMIT 64
@@ -103,14 +104,14 @@ static int hi1_to_low_utilization_limit = HI1_TO_LOW_UTILIZATION_LIMIT;
 static int hispeed1_threshold = MALI_HISPEED1_UTILIZATION_LIMIT;
 static int hispeed2_threshold = MALI_HISPEED2_UTILIZATION_LIMIT;
 
-static bool force_cpufreq_to_max = true;
+static bool force_cpufreq_to_max = false;
 static int force_cpufreq_to_max_threshold = MALI_MAX_UTILIZATION - 5;
 
 static bool is_running;
 static bool is_initialized;
 
 static bool is_delayed = true;
-static unsigned int start_delay = 35000;
+static unsigned int start_delay = 18000;
 
 static u32 mali_last_utilization;
 module_param(mali_last_utilization, uint, 0444);
@@ -222,11 +223,6 @@ static int mali_freq_up(void)
 	int freq;
 	
 	prcmu_qos_update_requirement(PRCMU_QOS_APE_OPP, "mali", PRCMU_QOS_MAX_VALUE);
-	
-	if (min_cpufreq_forced_to_max) {
-		set_min_cpufreq(prev_min_cpufreq); // unlock cpufreq on every gpu_freq_down
-		min_cpufreq_forced_to_max = false;
-	}
 
 	if (boost_cur < boost_hispeed2) {
 		if (boost_cur == boost_low)
@@ -255,15 +251,7 @@ static int mali_freq_up(void)
 		prcmu_write(PRCMU_PLLSOC0, pll);
 		
 		return 1;
-	} else {	
-	  	if (force_cpufreq_to_max && !min_cpufreq_forced_to_max) {
-			if (mali_last_utilization >= force_cpufreq_to_max_threshold) {
-				prev_min_cpufreq = get_min_cpufreq();
-				set_min_cpufreq(get_max_cpufreq()); // force max cpufreq if reached max gpu freq
-				min_cpufreq_forced_to_max = true;
-			}
-		}	
-	  
+	} else {	  
 		return 0;
 	}
 }
@@ -273,7 +261,7 @@ static int mali_freq_down(void)
 	u8 vape;
 	u32 pll;
 	int freq;
-	
+		
 	if (min_cpufreq_forced_to_max) {
 		set_min_cpufreq(prev_min_cpufreq); // unlock cpufreq on every gpu_freq_down
 		min_cpufreq_forced_to_max = false;
@@ -455,17 +443,28 @@ void mali_utilization_function(struct work_struct *ptr)
 		if (!((boost_cur != boost_low) && (prcmu_get_ddr_opp() == DDR_100_OPP)))
 			prcmu_qos_update_requirement(PRCMU_QOS_DDR_OPP, "mali", (signed char) 50);
 	}
-	
+
 	if (boost_cur == boost_hispeed1) {	
 		if (mali_last_utilization > ddr_50_opp_utilization_limit) {
 			if (mali_last_utilization > ddr_100_opp_utilization_limit)
 			      prcmu_qos_update_requirement(PRCMU_QOS_DDR_OPP, "mali", PRCMU_QOS_MAX_VALUE);
 			else
 			      prcmu_qos_update_requirement(PRCMU_QOS_DDR_OPP, "mali", (signed char) 50);
-		else 
+		} else 
 			prcmu_qos_update_requirement(PRCMU_QOS_DDR_OPP, "mali", PRCMU_QOS_DEFAULT_VALUE);
-	} else if (boost_cur == boost_hispeed2)
+	} else if (boost_cur == boost_hispeed2) {
 		prcmu_qos_update_requirement(PRCMU_QOS_DDR_OPP, "mali", PRCMU_QOS_MAX_VALUE);
+		if (force_cpufreq_to_max && !min_cpufreq_forced_to_max) {
+			if (mali_last_utilization >= force_cpufreq_to_max_threshold) {
+				prev_min_cpufreq = get_min_cpufreq();
+				set_min_cpufreq(get_max_cpufreq()); // force max cpufreq if reached max gpu freq
+				min_cpufreq_forced_to_max = true;
+			}
+		}
+	}
+	
+	if (boost_cur == boost_low)
+		prcmu_qos_update_requirement(PRCMU_QOS_APE_OPP, "mali", PRCMU_QOS_DEFAULT_VALUE);
 	
 	if (mali_last_utilization > ape_100_opp_utilization_limit) {
 		prcmu_qos_update_requirement(PRCMU_QOS_APE_OPP, "mali", PRCMU_QOS_MAX_VALUE);
@@ -761,6 +760,9 @@ static ssize_t mali_boost_low_store(struct kobject *kobj, struct kobj_attribute 
 	if (sscanf(buf, "idx=%u", &val)) {
 		if (val >= ARRAY_SIZE(mali_dvfs))
 			return -EINVAL;
+		
+		if (val > boost_hispeed1)
+			return -1;
 
 		if (boost_cur == boost_low)
 			boost_cur = val;
@@ -815,6 +817,9 @@ static ssize_t mali_boost_hispeed_store(struct kobject *kobj, struct kobj_attrib
 		if (val >= ARRAY_SIZE(mali_dvfs))
 			return -EINVAL;
 		
+		if (val < boost_low || val >= boost_hispeed2)
+			return -1;
+		
 		if (boost_cur == boost_hispeed1)
 			boost_cur = val;
 		
@@ -863,6 +868,9 @@ static ssize_t mali_boost_hispeed2_store(struct kobject *kobj, struct kobj_attri
 	if (sscanf(buf, "idx=%u", &val)) {
 		if (val >= ARRAY_SIZE(mali_dvfs))
 			return -EINVAL;
+		
+		if (val <= boost_hispeed1)
+			return -1;
 		
 		if (boost_cur == boost_hispeed2)
 			boost_cur = val;
