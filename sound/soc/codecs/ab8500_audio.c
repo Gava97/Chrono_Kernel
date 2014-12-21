@@ -842,6 +842,7 @@ static int vape_voltage(u8 raw)
 
 static bool lpa_mode_enabled = 0;
 static u8 lpa_vape2 = 0x18;
+static u8 lpa_vape2_prev = 0; /* initial value */
 
 static int abb_codec_lpa_mode(bool suspend)
 {
@@ -855,6 +856,10 @@ static int abb_codec_lpa_mode(bool suspend)
 	 */
 	if (suspend) {
 		regval = lpa_vape2;
+		prcmu_abb_read(AB8500_REGU_CTRL2,
+					AB8500_VAPESEL2,
+					&lpa_vape2_prev, 1);
+		
 		ret = prcmu_abb_write(AB8500_REGU_CTRL2,
 					      AB8500_VAPESEL2,
 					      &regval, 1);
@@ -863,7 +868,11 @@ static int abb_codec_lpa_mode(bool suspend)
 
 		
 	} else {
-		regval = VAPE_SEL2_DEFAULT;
+		if (!lpa_vape2_prev)
+			regval = VAPE_SEL2_DEFAULT;
+		else
+			regval = lpa_vape2_prev;
+		
 		ret = prcmu_abb_write(AB8500_REGU_CTRL2,
 					      AB8500_VAPESEL2,
 					      &regval, 1);
