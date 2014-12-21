@@ -1061,6 +1061,12 @@ static int __devinit ws2401_dpi_mcde_probe(
 	lcd->earlysuspend.resume  = ws2401_dpi_mcde_late_resume;
 	register_early_suspend(&lcd->earlysuspend);
 #endif
+	//when screen is on, APE_OPP 25 sometimes messes it up
+	//TODO change these to add/update/remove
+	if (prcmu_qos_add_requirement(PRCMU_QOS_APE_OPP,
+			"codina_lcd_dpi", 50)) {
+		pr_info("pcrm_qos_add APE failed\n");
+	}
 
 	dev_dbg(&ddev->dev, "DPI display probed\n");
 
@@ -1163,6 +1169,21 @@ static int ws2401_dpi_mcde_suspend(
 	return ret;
 }
 
+static void requirements_add_thread(struct work_struct *requirements_add_work)
+{
+	if (prcmu_qos_add_requirement(PRCMU_QOS_APE_OPP,
+			"codina_lcd_dpi", 50)) {
+		pr_info("pcrm_qos_add APE failed\n");
+	}
+}
+static DECLARE_WORK(requirements_add_work, requirements_add_thread);
+
+static void requirements_remove_thread(struct work_struct *requirements_remove_work)
+{
+	prcmu_qos_remove_requirement(PRCMU_QOS_APE_OPP, "codina_lcd_dpi");
+}
+static DECLARE_WORK(requirements_remove_work, requirements_remove_thread);
+
 #ifdef CONFIG_HAS_EARLYSUSPEND
 static void ws2401_dpi_mcde_early_suspend(
 		struct early_suspend *earlysuspend)
@@ -1189,6 +1210,8 @@ static void ws2401_dpi_mcde_early_suspend(
 	}
 	#endif
 
+	schedule_work(&requirements_remove_work);
+
 	ws2401_dpi_mcde_suspend(lcd->mdd, dummy);
 
 }
@@ -1204,6 +1227,8 @@ static void ws2401_dpi_mcde_late_resume(
 	if (lcd->lcd_connected)
 		enable_irq(GPIO_TO_IRQ(lcd->esd_port));
 	#endif
+
+	schedule_work(&requirements_add_work);
 
 	ws2401_dpi_mcde_resume(lcd->mdd);
 
