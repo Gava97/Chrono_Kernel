@@ -128,6 +128,8 @@ struct ws2401_dpi {
 #endif
 };
 
+static signed char apeopp_requirement = 0, ddropp_requirement = 0;
+
 #ifdef ESD_TEST
 struct ws2401_dpi *pdpi;
 #endif
@@ -357,11 +359,16 @@ static void ws2401_request_opp(struct ws2401_dpi *lcd)
 {
 	if ((!lcd->opp_is_requested) && (lcd->pd->min_ddr_opp > 0)) {
 		if (prcmu_qos_add_requirement(PRCMU_QOS_DDR_OPP,
-						LCD_DRIVER_NAME_WS2401,
-						lcd->pd->min_ddr_opp)) {
+					LCD_DRIVER_NAME_WS2401,
+					ddropp_requirement ? 
+					ddropp_requirement :
+					lcd->pd->min_ddr_opp)) {
 			dev_err(lcd->dev, "add DDR OPP %d failed\n",
+				ddropp_requirement ?
+				ddropp_requirement :
 				lcd->pd->min_ddr_opp);
 		}
+		
 		dev_dbg(lcd->dev, "DDR OPP requested at %d%%\n",lcd->pd->min_ddr_opp);
 		lcd->opp_is_requested = true;
 	}
@@ -806,6 +813,59 @@ static const struct backlight_ops ws2401_dpi_backlight_ops  = {
 	.update_status = ws2401_dpi_set_brightness,
 };
 
+static ssize_t ws2401_sysfs_show_opp(struct device *dev,
+				      struct device_attribute *attr, char *buf)
+{
+	return sprintf(buf, "apeopp=%d\n"
+			    "ddropp=%d\n",
+			    apeopp_requirement,
+			    ddropp_requirement);
+}
+
+static ssize_t ws2401_sysfs_store_opp(struct device *dev,
+				       struct device_attribute *attr,
+				       const char *buf, size_t len)
+{
+	int val;
+  
+  	if (!strncmp(&buf[0], "apeopp=", 7))
+	{
+		sscanf(&buf[7], "%d", &val);
+		
+		if ((val != 25) && (val != 50) && (val != 100))
+			goto out;
+		
+		apeopp_requirement = val;
+		
+		prcmu_qos_update_requirement(PRCMU_QOS_APE_OPP,
+			"codina_lcd_dpi", apeopp_requirement ?
+			apeopp_requirement : 50);
+
+		return len;
+	}
+	
+	if (!strncmp(&buf[0], "ddropp=", 7))
+	{
+		sscanf(&buf[7], "%d", &val);
+		
+		if ((val != 25) && (val != 50) && (val != 100))
+			goto out;
+		
+		ddropp_requirement = val;
+		
+		prcmu_qos_update_requirement(PRCMU_QOS_DDR_OPP,
+			"codina_lcd_dpi", ddropp_requirement ?
+			ddropp_requirement : 50);
+
+		return len;
+	}
+	
+out:
+	return -EINVAL;
+}
+static DEVICE_ATTR(mcde_screenon_opp, 0644,
+		ws2401_sysfs_show_opp, ws2401_sysfs_store_opp);
+
 static ssize_t ws2401_dpi_sysfs_store_lcd_power(struct device *dev,
 						struct device_attribute *attr,
 						const char *buf, size_t len)
@@ -1044,6 +1104,10 @@ static int __devinit ws2401_dpi_mcde_probe(
 	if (ret < 0)
 		dev_err(&(ddev->dev),
 			"failed to add lcd_power sysfs entries\n");
+	
+	ret = device_create_file(&(ddev->dev), &dev_attr_mcde_screenon_opp);	
+	if (ret < 0)
+		dev_err(&(ddev->dev), "failed to add mcde_screeon_opp sysfs entries\n");
 
 	lcd->spi_drv.driver.name	= "pri_lcd_spi";
 	lcd->spi_drv.driver.bus		= &spi_bus_type;
@@ -1172,7 +1236,7 @@ static int ws2401_dpi_mcde_suspend(
 static void requirements_add_thread(struct work_struct *requirements_add_work)
 {
 	if (prcmu_qos_add_requirement(PRCMU_QOS_APE_OPP,
-			"codina_lcd_dpi", 50)) {
+			"codina_lcd_dpi", apeopp_requirement ? apeopp_requirement : 50)) {
 		pr_info("pcrm_qos_add APE failed\n");
 	}
 }
