@@ -39,6 +39,9 @@
 
 #define MALI_HIGH_TO_LOW_LEVEL_UTILIZATION_LIMIT 64
 #define MALI_LOW_TO_HIGH_LEVEL_UTILIZATION_LIMIT 192
+#define MALI_APE25OPP_UTILIZATION_LIMIT 70
+#define MALI_APE50OPP_UTILIZATION_LIMIT 80
+#define MALI_APE100OPP_UTILIZATION_LIMIT 100
 
 #define MALI_UX500_VERSION		"1.0.1"
 
@@ -95,6 +98,12 @@ static struct mali_dvfs_data mali_dvfs[] = {
 
 int mali_utilization_high_to_low = MALI_HIGH_TO_LOW_LEVEL_UTILIZATION_LIMIT;
 int mali_utilization_low_to_high = MALI_LOW_TO_HIGH_LEVEL_UTILIZATION_LIMIT;
+
+static bool mali_opp_enable = false;
+
+static int ape_25_opp_utilization_limit = MALI_APE25OPP_UTILIZATION_LIMIT;
+static int ape_50_opp_utilization_limit = MALI_APE50OPP_UTILIZATION_LIMIT;
+static int ape_100_opp_utilization_limit = MALI_APE100OPP_UTILIZATION_LIMIT;
 
 static bool is_running;
 static bool is_initialized;
@@ -266,6 +275,11 @@ static _mali_osk_errcode_t mali_platform_powerdown(void)
 		}
 		is_running = false;
 	}
+	if (mali_opp_enable) {
+		prcmu_qos_update_requirement(PRCMU_QOS_DDR_OPP, "mali", PRCMU_QOS_DEFAULT_VALUE);
+		prcmu_qos_update_requirement(PRCMU_QOS_APE_OPP, "mali", PRCMU_QOS_DEFAULT_VALUE);
+	}
+	
 	MALI_DEBUG_PRINT(4, ("mali_platform_powerdown is_running: %u\n", is_running));
 	MALI_SUCCESS;
 }
@@ -354,11 +368,26 @@ void mali_utilization_function(struct work_struct *ptr)
 				return;		//After we switch to APE_100_OPP we want to measure utilization once again before entering boost logic
 			}
 		} else {
-			if (mali_last_utilization < mali_utilization_high_to_low) {
+			if (!mali_opp_enable) {
+				if (mali_last_utilization < mali_utilization_high_to_low) {
+					if (!has_requested_low) {
+						/*Remove APE_OPP and DDR_OPP requests*/
+						prcmu_qos_update_requirement(PRCMU_QOS_DDR_OPP, "mali", PRCMU_QOS_DEFAULT_VALUE);
+						prcmu_qos_update_requirement(PRCMU_QOS_APE_OPP, "mali", PRCMU_QOS_DEFAULT_VALUE);
+						MALI_DEBUG_PRINT(5, ("MALI GPU utilization: %u SIGNAL_LOW\n", mali_last_utilization));
+						has_requested_low = 1;
+					}
+				}
+			} else {
 				if (!has_requested_low) {
-					/*Remove APE_OPP and DDR_OPP requests*/
 					prcmu_qos_update_requirement(PRCMU_QOS_DDR_OPP, "mali", PRCMU_QOS_DEFAULT_VALUE);
-					prcmu_qos_update_requirement(PRCMU_QOS_APE_OPP, "mali", PRCMU_QOS_DEFAULT_VALUE);
+					if (mali_last_utilization > ape_100_opp_utilization_limit) {
+						prcmu_qos_update_requirement(PRCMU_QOS_APE_OPP, "mali", PRCMU_QOS_MAX_VALUE);
+					} else if (mali_last_utilization > ape_50_opp_utilization_limit)  {
+						prcmu_qos_update_requirement(PRCMU_QOS_APE_OPP, "mali", (signed char) 50);
+					} else 
+						prcmu_qos_update_requirement(PRCMU_QOS_APE_OPP, "mali", PRCMU_QOS_DEFAULT_VALUE);
+					
 					MALI_DEBUG_PRINT(5, ("MALI GPU utilization: %u SIGNAL_LOW\n", mali_last_utilization));
 					has_requested_low = 1;
 				}
@@ -727,6 +756,53 @@ static ssize_t mali_available_frequencies_show(struct kobject *kobj, struct kobj
 }
 ATTR_RO(mali_available_frequencies);
 
+static ssize_t mali_opp_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
+{
+	sprintf(buf, "%sStatus=%s\n", buf, mali_opp_enable ? "on" : "off");
+	sprintf(buf, "%sMali utilization thresholds:\n", buf);
+	sprintf(buf, "%sape25opp=%d\n", buf, ape_25_opp_utilization_limit);
+	sprintf(buf, "%sape50opp=%d\n", buf, ape_50_opp_utilization_limit);
+	sprintf(buf, "%sape100opp=%d\n", buf, ape_100_opp_utilization_limit);
+	
+	return strlen(buf);
+}
+
+static ssize_t mali_opp_store(struct kobject *kobj, struct kobj_attribute *attr, const char *buf, size_t count)
+{
+	int val;
+	
+	if (!strncmp(buf, "on", 2)) {
+		mali_opp_enable = true;
+		return count;
+	}
+
+	if (!strncmp(buf, "off", 3)) {
+		mali_opp_enable = false;
+		return count;
+	}
+
+	if (sscanf(buf, "ape100opp=%u", &val)) {
+		ape_100_opp_utilization_limit = val;
+
+		return count;
+	}
+
+	if (sscanf(buf, "ape50opp=%u", &val)) {
+		ape_50_opp_utilization_limit = val;
+
+		return count;
+	}
+
+	if (sscanf(buf, "ape25opp=%u", &val)) {
+		ape_25_opp_utilization_limit = val;
+
+		return count;
+	}
+
+	return -EINVAL;
+}
+ATTR_RW(mali_opp);
+
 static struct attribute *mali_attrs[] = {
 	&version_interface.attr, 
 	&mali_gpu_clock_interface.attr, 
@@ -740,6 +816,7 @@ static struct attribute *mali_attrs[] = {
 	&mali_boost_high_interface.attr, 
 	&mali_dvfs_config_interface.attr, 
 	&mali_available_frequencies_interface.attr, 
+	&mali_opp_interface.attr,
 	NULL,
 };
 
