@@ -286,6 +286,8 @@ static void ab8500_usb_regulator_ctrl(struct ab8500_usb *ab, bool sel_host,
 	}
 }
 
+int ab8500_usb_ignore_ape_req = false;
+module_param(ab8500_usb_ignore_ape_req, uint, 0644);
 
 static void ab8500_usb_phy_enable(struct ab8500_usb *ab, bool sel_host)
 {
@@ -299,9 +301,10 @@ static void ab8500_usb_phy_enable(struct ab8500_usb *ab, bool sel_host)
 
 	ab8500_usb_regulator_ctrl(ab, sel_host, true);
 
-	prcmu_qos_update_requirement(PRCMU_QOS_APE_OPP,
-				     (char *)dev_name(ab->dev),
-				     PRCMU_QOS_APE_OPP_MAX);
+	if (!ab8500_usb_ignore_ape_req)
+		prcmu_qos_update_requirement(PRCMU_QOS_APE_OPP,
+					  (char *)dev_name(ab->dev),
+					    PRCMU_QOS_APE_OPP_MAX);
 
 	schedule_delayed_work_on(0,
 					&ab->work_usb_workaround,
