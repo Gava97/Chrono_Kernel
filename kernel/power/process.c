@@ -119,13 +119,9 @@ static int try_to_freeze_tasks(bool user_only)
 }
 
 /**
-<<<<<<< HEAD
- *	freeze_processes - tell processes to enter the refrigerator
-=======
  * freeze_processes - Signal user space processes to enter the refrigerator.
  *
  * On success, returns 0.  On failure, -errno and system is fully thawed.
->>>>>>> 03afed8... freezer: clean up freeze_processes() failure path
  */
 int freeze_processes(void)
 {
@@ -137,11 +133,6 @@ int freeze_processes(void)
 	printk("Freezing user space processes ... ");
 	pm_freezing = true;
 	error = try_to_freeze_tasks(true);
-<<<<<<< HEAD
-	if (error)
-		goto Exit;
-	printk("done.\n");
-=======
 	if (!error) {
 		printk("done.");
 		oom_killer_disable();
@@ -162,7 +153,6 @@ int freeze_processes(void)
 int freeze_kernel_threads(void)
 {
 	int error;
->>>>>>> 03afed8... freezer: clean up freeze_processes() failure path
 
 	printk("Freezing remaining freezable tasks ... ");
 	pm_nosig_freezing = true;
