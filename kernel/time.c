@@ -27,6 +27,7 @@
  *	with nanosecond accuracy
  */
 
+#include <linux/module.h>
 #include <linux/timex.h>
 #include <linux/capability.h>
 #include <linux/clocksource.h>
