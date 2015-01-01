@@ -100,17 +100,6 @@ static int ux500_pd_runtime_idle(struct device *dev)
 
 static void ux500_pd_disable(struct pm_runtime_data *prd)
 {
-	int ret;
-	struct pm_runtime_data *prd = __to_prd(dev);
-
-	dev_vdbg(dev, "%s()\n", __func__);
-
-	platform_pm_runtime_bug(dev, prd);
-
-	ret = pm_generic_runtime_suspend(dev);
-	if (ret)
-		return ret;
-
 	if (prd && test_bit(BIT_ACTIVE, &prd->flags)) {
 
 		if (prd->pins)
