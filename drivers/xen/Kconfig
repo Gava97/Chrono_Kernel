@@ -9,8 +9,6 @@ config XEN_BALLOON
 	  the system to expand the domain's memory allocation, or alternatively
 	  return unneeded memory to the system.
 
-<<<<<<< HEAD
-=======
 config XEN_SELFBALLOONING
 	bool "Dynamically self-balloon kernel memory to target"
 	depends on XEN && XEN_BALLOON && CLEANCACHE && SWAP
@@ -58,7 +56,6 @@ config XEN_BALLOON_MEMORY_HOTPLUG
 
 	  In that case step 3 should be omitted.
 
->>>>>>> 45b583b... Merge 'akpm' patch series
 config XEN_SCRUB_PAGES
 	bool "Scrub pages before returning them to system"
 	depends on XEN_BALLOON
