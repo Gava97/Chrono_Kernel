@@ -5,7 +5,6 @@
  */
 
 #include <linux/module.h>
-#include <linux/version.h>
 #include <linux/mm.h>
 #include <linux/utsname.h>
 #include <linux/mman.h>
@@ -17,6 +16,8 @@
 #include <linux/perf_event.h>
 #include <linux/resource.h>
 #include <linux/kernel.h>
+#include <linux/version.h>
+#include <linux/ctype.h>
 #include <linux/kexec.h>
 #include <linux/workqueue.h>
 #include <linux/capability.h>
@@ -52,6 +53,9 @@
 #include <asm/uaccess.h>
 #include <asm/io.h>
 #include <asm/unistd.h>
+
+/* Move somewhere else to avoid recompiling? */
+#include <generated/utsrelease.h>
 
 #ifndef SET_UNALIGN_CTL
 # define SET_UNALIGN_CTL(a,b)	(-EINVAL)
