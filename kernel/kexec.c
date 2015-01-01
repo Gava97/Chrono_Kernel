@@ -1141,29 +1141,15 @@ int crash_shrink_memory(unsigned long new_size)
 		goto unlock;
 	}
 
-	ram_res = kzalloc(sizeof(*ram_res), GFP_KERNEL);
-	if (!ram_res) {
-		ret = -ENOMEM;
-		goto unlock;
-	}
-
-	start = roundup(start, KEXEC_CRASH_MEM_ALIGN);
-	end = roundup(start + new_size, KEXEC_CRASH_MEM_ALIGN);
+	start = roundup(start, PAGE_SIZE);
+	end = roundup(start + new_size, PAGE_SIZE);
 
 	crash_free_reserved_phys_range(end, crashk_res.end);
 
 	if ((start == end) && (crashk_res.parent != NULL))
 		release_resource(&crashk_res);
-
-	ram_res->start = end;
-	ram_res->end = crashk_res.end;
-	ram_res->flags = IORESOURCE_BUSY | IORESOURCE_MEM;
-	ram_res->name = "System RAM";
-
 	crashk_res.end = end - 1;
 
-	insert_resource(&iomem_resource, ram_res);
-	crash_unmap_reserved_pages();
 unlock:
 	mutex_unlock(&kexec_mutex);
 	return ret;
