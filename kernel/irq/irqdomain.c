@@ -18,29 +18,6 @@ static DEFINE_MUTEX(irq_domain_mutex);
  */
 void irq_domain_add(struct irq_domain *domain)
 {
-	struct irq_data *d;
-	int hwirq;
-
-	/*
-	 * This assumes that the irq_domain owner has already allocated
-	 * the irq_descs.  This block will be removed when support for dynamic
-	 * allocation of irq_descs is added to irq_domain.
-	 */
-	for (hwirq = 0; hwirq < domain->nr_irq; hwirq++) {
-		d = irq_get_irq_data(irq_domain_to_irq(domain, hwirq));
-		if (!d) {
-			WARN(1, "error: assigning domain to non existant irq_desc");
-			return;
-		}
-		if (d->domain) {
-			/* things are broken; just report, don't clean up */
-			WARN(1, "error: irq_desc already assigned to a domain");
-			return;
-		}
-		d->domain = domain;
-		d->hwirq = hwirq;
-	}
-
 	mutex_lock(&irq_domain_mutex);
 	list_add(&domain->list, &irq_domain_list);
 	mutex_unlock(&irq_domain_mutex);
@@ -192,9 +169,6 @@ int irq_domain_simple_dt_translate(struct irq_domain *d,
 		return -EINVAL;
 	if (intsize != 1)
 		return -EINVAL;
-	if (d->nr_irq && ((intspec[0] < d->hwirq_base) ||
-	    (intspec[0] >= d->hwirq_base + d->nr_irq)))
-		return -EINVAL;
 
 	*out_hwirq = intspec[0];
 	*out_type = IRQ_TYPE_NONE;
@@ -229,11 +203,13 @@ void irq_domain_generate_simple(const struct of_device_id *match,
 				u64 phys_base, unsigned int irq_start)
 {
 	struct device_node *node;
-	pr_debug("looking for phys_base=%llx, irq_start=%i\n",
+	pr_info("looking for phys_base=%llx, irq_start=%i\n",
 		(unsigned long long) phys_base, (int) irq_start);
 	node = of_find_matching_node_by_address(NULL, match, phys_base);
 	if (node)
 		irq_domain_add_simple(node, irq_start);
+	else
+		pr_info("no node found\n");
 }
 EXPORT_SYMBOL_GPL(irq_domain_generate_simple);
 #endif
