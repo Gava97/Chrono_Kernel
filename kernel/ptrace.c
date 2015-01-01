@@ -82,18 +82,8 @@ void __ptrace_unlink(struct task_struct *child)
 	 */
 	if (!(child->flags & PF_EXITING) &&
 	    (child->signal->flags & SIGNAL_STOP_STOPPED ||
-	     child->signal->group_stop_count)) {
-		child->jobctl |= JOBCTL_STOP_PENDING;
-		/*
-		 * This is only possible if this thread was cloned by the
-		 * traced task running in the stopped group, set the signal
-		 * for the future reports.
-		 * FIXME: we should change ptrace_init_task() to handle this
-		 * case.
-		 */
-		if (!(child->jobctl & JOBCTL_STOP_SIGMASK))
-			child->jobctl |= SIGSTOP;
-	}
+	     child->signal->group_stop_count))
+		child->group_stop |= GROUP_STOP_PENDING;
 
 	/*
 	 * If transition to TASK_STOPPED is pending or in TASK_TRACED, kick
@@ -142,14 +132,6 @@ int ptrace_check_attach(struct task_struct *child, int kill)
 	return ret;
 }
 
-static int ptrace_has_cap(struct user_namespace *ns, unsigned int mode)
-{
-	if (mode & PTRACE_MODE_NOAUDIT)
-		return has_ns_capability_noaudit(current, ns, CAP_SYS_PTRACE);
-	else
-		return has_ns_capability(current, ns, CAP_SYS_PTRACE);
-}
-
 int __ptrace_may_access(struct task_struct *task, unsigned int mode)
 {
 	const struct cred *cred = current_cred(), *tcred;
@@ -176,7 +158,7 @@ int __ptrace_may_access(struct task_struct *task, unsigned int mode)
 	     cred->gid == tcred->sgid &&
 	     cred->gid == tcred->gid))
 		goto ok;
-	if (ptrace_has_cap(tcred->user->user_ns, mode))
+	if (ns_capable(tcred->user->user_ns, CAP_SYS_PTRACE))
 		goto ok;
 	rcu_read_unlock();
 	return -EPERM;
@@ -185,7 +167,7 @@ ok:
 	smp_rmb();
 	if (task->mm)
 		dumpable = get_dumpable(task->mm);
-	if (!dumpable  && !ptrace_has_cap(task_user_ns(task), mode))
+	if (!dumpable && !task_ns_capable(task, CAP_SYS_PTRACE))
 		return -EPERM;
 
 	return security_ptrace_access_check(task, mode);
@@ -200,38 +182,10 @@ bool ptrace_may_access(struct task_struct *task, unsigned int mode)
 	return !err;
 }
 
-static int ptrace_attach(struct task_struct *task, long request,
-			 unsigned long addr,
-			 unsigned long flags)
+static int ptrace_attach(struct task_struct *task)
 {
 	bool wait_trap = false;
 	int retval;
-
-	/*
-	 * SEIZE will enable new ptrace behaviors which will be implemented
-	 * gradually.  SEIZE_DEVEL bit is used to prevent applications
-	 * expecting full SEIZE behaviors trapping on kernel commits which
-	 * are still in the process of implementing them.
-	 *
-	 * Only test programs for new ptrace behaviors being implemented
-	 * should set SEIZE_DEVEL.  If unset, SEIZE will fail with -EIO.
-	 *
-	 * Once SEIZE behaviors are completely implemented, this flag
-	 * will be removed.
-	 */
-	retval = -EIO;
-	if (seize) {
-		if (addr != 0)
-			goto out;
-		if (!(flags & PTRACE_SEIZE_DEVEL))
-			goto out;
-		flags &= ~(unsigned long)PTRACE_SEIZE_DEVEL;
-		if (flags & ~(unsigned long)PTRACE_O_MASK)
-			goto out;
-		flags = PT_PTRACED | PT_SEIZED | (flags << PT_OPT_FLAG_SHIFT);
-	} else {
-		flags = PT_PTRACED;
-	}
 
 	audit_ptrace(task);
 
@@ -243,7 +197,7 @@ static int ptrace_attach(struct task_struct *task, long request,
 
 	/*
 	 * Protect exec's credential calculations against our interference;
-	 * SUID, SGID and LSM creds get determined differently
+	 * interference; SUID, SGID and LSM creds get determined differently
 	 * under ptrace.
 	 */
 	retval = -ERESTARTNOINTR;
@@ -263,11 +217,9 @@ static int ptrace_attach(struct task_struct *task, long request,
 	if (task->ptrace)
 		goto unlock_tasklist;
 
-	if (seize)
-		flags |= PT_SEIZED;
-	if (ns_capable(task_user_ns(task), CAP_SYS_PTRACE))
-		flags |= PT_PTRACE_CAP;
-	task->ptrace = flags;
+	task->ptrace = PT_PTRACED;
+	if (task_ns_capable(task, CAP_SYS_PTRACE))
+		task->ptrace |= PT_PTRACE_CAP;
 
 	__ptrace_link(task, current);
 	send_sig_info(SIGSTOP, SEND_SIG_FORCED, task);
@@ -502,18 +454,30 @@ int ptrace_writedata(struct task_struct *tsk, char __user *src, unsigned long ds
 
 static int ptrace_setoptions(struct task_struct *child, unsigned long data)
 {
-	unsigned flags;
+	child->ptrace &= ~PT_TRACE_MASK;
 
-	if (data & ~(unsigned long)PTRACE_O_MASK)
-		return -EINVAL;
+	if (data & PTRACE_O_TRACESYSGOOD)
+		child->ptrace |= PT_TRACESYSGOOD;
 
-	/* Avoid intermediate state when all opts are cleared */
-	flags = child->ptrace;
-	flags &= ~(PTRACE_O_MASK << PT_OPT_FLAG_SHIFT);
-	flags |= (data << PT_OPT_FLAG_SHIFT);
-	child->ptrace = flags;
+	if (data & PTRACE_O_TRACEFORK)
+		child->ptrace |= PT_TRACE_FORK;
 
-	return 0;
+	if (data & PTRACE_O_TRACEVFORK)
+		child->ptrace |= PT_TRACE_VFORK;
+
+	if (data & PTRACE_O_TRACECLONE)
+		child->ptrace |= PT_TRACE_CLONE;
+
+	if (data & PTRACE_O_TRACEEXEC)
+		child->ptrace |= PT_TRACE_EXEC;
+
+	if (data & PTRACE_O_TRACEVFORKDONE)
+		child->ptrace |= PT_TRACE_VFORK_DONE;
+
+	if (data & PTRACE_O_TRACEEXIT)
+		child->ptrace |= PT_TRACE_EXIT;
+
+	return (data & ~PTRACE_O_MASK) ? -EINVAL : 0;
 }
 
 static int ptrace_getsiginfo(struct task_struct *child, siginfo_t *info)
@@ -850,8 +814,8 @@ SYSCALL_DEFINE4(ptrace, long, request, long, pid, unsigned long, addr,
 		goto out;
 	}
 
-	if (request == PTRACE_ATTACH || request == PTRACE_SEIZE) {
-		ret = ptrace_attach(child, request, addr, data);
+	if (request == PTRACE_ATTACH) {
+		ret = ptrace_attach(child);
 		/*
 		 * Some architectures need to do book-keeping after
 		 * a ptrace attach.
@@ -992,8 +956,8 @@ asmlinkage long compat_sys_ptrace(compat_long_t request, compat_long_t pid,
 		goto out;
 	}
 
-	if (request == PTRACE_ATTACH || request == PTRACE_SEIZE) {
-		ret = ptrace_attach(child, request, addr, data);
+	if (request == PTRACE_ATTACH) {
+		ret = ptrace_attach(child);
 		/*
 		 * Some architectures need to do book-keeping after
 		 * a ptrace attach.
