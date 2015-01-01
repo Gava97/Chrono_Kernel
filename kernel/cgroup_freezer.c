@@ -159,23 +159,24 @@ static void freezer_destroy(struct cgroup_subsys *ss,
  */
 static int freezer_can_attach(struct cgroup_subsys *ss,
 			      struct cgroup *new_cgroup,
-			      struct cgroup_taskset *tset)
+			      struct task_struct *task)
 {
 	struct freezer *freezer;
-	struct task_struct *task;
 
 	/*
 	 * Anything frozen can't move or be moved to/from.
 	 */
-	cgroup_taskset_for_each(task, new_cgroup, tset)
-		if (cgroup_freezing(task))
-			return -EBUSY;
 
 	freezer = cgroup_freezer(new_cgroup);
 	if (freezer->state != CGROUP_THAWED)
 		return -EBUSY;
 
 	return 0;
+}
+
+static int freezer_can_attach_task(struct cgroup *cgrp, struct task_struct *tsk)
+{
+	return cgroup_freezing(tsk) ? -EBUSY : 0;
 }
 
 static void freezer_fork(struct cgroup_subsys *ss, struct task_struct *task)
@@ -373,5 +374,10 @@ struct cgroup_subsys freezer_subsys = {
 	.populate	= freezer_populate,
 	.subsys_id	= freezer_subsys_id,
 	.can_attach	= freezer_can_attach,
+	.can_attach_task = freezer_can_attach_task,
+	.pre_attach	= NULL,
+	.attach_task	= NULL,
+	.attach		= NULL,
 	.fork		= freezer_fork,
+	.exit		= NULL,
 };
