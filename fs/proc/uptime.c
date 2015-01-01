@@ -15,10 +15,12 @@ static int uptime_proc_show(struct seq_file *m, void *v)
 	u64 nsec;
 	u32 rem;
 	int i;
+	cputime_t idletime = cputime_zero;
 
 	idletime = 0;
 	for_each_possible_cpu(i)
-		idletime += (__force u64) kcpustat_cpu(i).cpustat[CPUTIME_IDLE];
+		idletime = cputime64_add(idletime, kstat_cpu(i).cpustat.idle);
+	
 	do_posix_clock_monotonic_gettime(&uptime);
 	monotonic_to_bootbased(&uptime);
 	nsec = cputime64_to_jiffies64(idletime) * TICK_NSEC;
