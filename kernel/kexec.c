@@ -1125,7 +1125,6 @@ int crash_shrink_memory(unsigned long new_size)
 	int ret = 0;
 	unsigned long start, end;
 	unsigned long old_size;
-	struct resource *ram_res;
 
 	mutex_lock(&kexec_mutex);
 

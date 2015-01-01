@@ -54,8 +54,10 @@
 #include <asm/io.h>
 #include <asm/unistd.h>
 
+#if 0
 /* Move somewhere else to avoid recompiling? */
 #include <generated/utsrelease.h>
+#endif
 
 #ifndef SET_UNALIGN_CTL
 # define SET_UNALIGN_CTL(a,b)	(-EINVAL)
@@ -1217,6 +1219,7 @@ DECLARE_RWSEM(uts_sem);
 #define override_architecture(name)	0
 #endif
 
+#if 0
 /*
  * Work around broken programs that cannot handle "Linux 3.0".
  * Instead we map 3.x to 2.6.40+x, so e.g. 3.0 would be 2.6.40
@@ -1246,6 +1249,7 @@ static int override_release(char __user *release, size_t len)
 	}
 	return ret;
 }
+#endif
 
 SYSCALL_DEFINE1(newuname, struct new_utsname __user *, name)
 {
