@@ -1603,7 +1603,7 @@ long do_fork(unsigned long clone_flags,
 
 		if (clone_flags & CLONE_VFORK) {
 			if (!wait_for_vfork_done(p, &vfork))
-				ptrace_event(PTRACE_EVENT_VFORK_DONE, nr);
+				ptrace_event(PTRACE_EVENT_VFORK_DONE, nr, NULL);
 		}
 	} else {
 		nr = PTR_ERR(p);

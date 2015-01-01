@@ -10,7 +10,6 @@
  *	Remote softirq infrastructure is by Jens Axboe.
  */
 
-#include <linux/export.h>
 #include <linux/kernel_stat.h>
 #include <linux/interrupt.h>
 #include <linux/init.h>
