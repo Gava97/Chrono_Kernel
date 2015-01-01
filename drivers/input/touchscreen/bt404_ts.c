@@ -425,6 +425,7 @@ static void bt404_ponkey_thread(struct work_struct *bt404_ponkey_work)
 	waking_up = false;
 }
 static DECLARE_WORK(bt404_ponkey_work, bt404_ponkey_thread);
+
 #endif /* TOUCH_DT2W or TOUCH_S2W */
 
 #ifdef TOUCH_S2W
@@ -4729,15 +4730,13 @@ out:
 }
 #endif
 
+
 #ifdef CONFIG_HAS_EARLYSUSPEND
 static void bt404_ts_late_resume(struct early_suspend *h)
 {
 	struct bt404_ts_data *data =
 			container_of(h, struct bt404_ts_data, early_suspend);
-#if defined(TOUCH_S2W) || defined(TOUCH_DT2W)
 	is_suspend = false;
-#endif
-
 	bt404_ts_resume(&data->client->dev);
 }
 
@@ -4745,9 +4744,7 @@ static void bt404_ts_early_suspend(struct early_suspend *h)
 {
 	struct bt404_ts_data *data =
 			container_of(h, struct bt404_ts_data, early_suspend);
-#if defined(TOUCH_S2W) || defined(TOUCH_DT2W)
 	is_suspend = true;
-#endif
 	bt404_ts_suspend(&data->client->dev);
 }
 
