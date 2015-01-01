@@ -37,6 +37,7 @@ extern void __thaw_task(struct task_struct *t);
 
 extern bool __refrigerator(bool check_kthr_stop);
 extern int freeze_processes(void);
+extern int freeze_kernel_threads(void);
 extern void thaw_processes(void);
 extern void thaw_kernel_threads(void);
 
