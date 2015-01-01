@@ -5,6 +5,7 @@
  */
 
 #include <linux/module.h>
+#include <linux/version.h>
 #include <linux/mm.h>
 #include <linux/utsname.h>
 #include <linux/mman.h>
