@@ -43,7 +43,6 @@
 #include <linux/kernel.h>
 
 #include <linux/uaccess.h>
-#include <linux/export.h>
 
 /*
  * locking rule: all changes to constraints or notifiers lists
