@@ -303,42 +303,50 @@ int inode_permission(struct inode *inode, int mask)
 	return security_inode_permission(inode, mask);
 }
 
-/**
- * exec_permission  -  check for right to do lookups in a given directory
- * @inode:	inode to check permission on
- * @flags:	IPERM_FLAG_ flags.
+/*
+ * get_write_access() gets write permission for a file.
+ * put_write_access() releases this write permission.
+ * This is used for regular files.
+ * We cannot support write (and maybe mmap read-write shared) accesses and
+ * MAP_DENYWRITE mmappings simultaneously. The i_writecount field of an inode
+ * can have the following values:
+ * 0: no writers, no VM_DENYWRITE mappings
+ * < 0: (-i_writecount) vm_area_structs with VM_DENYWRITE set exist
+ * > 0: (i_writecount) users are writing to the file.
  *
- * Short-cut version of inode_permission(), for calling on directories
- * during pathname resolution.  Combines parts of inode_permission()
- * and generic_permission(), and tests ONLY for MAY_EXEC permission.
- *
- * If appropriate, check DAC only.  If not appropriate, or
- * short-cut DAC fails, then call ->permission() to do more
- * complete permission check.
+ * Normally we operate on that counter with atomic_{inc,dec} and it's safe
+ * except for the cases where we don't hold i_writecount yet. Then we need to
+ * use {get,deny}_write_access() - these functions check the sign and refuse
+ * to do the change if sign is wrong. Exclusion between them is provided by
+ * the inode->i_lock spinlock.
  */
-static inline int exec_permission(struct inode *inode, unsigned int flags)
-{
-	int ret;
-	struct user_namespace *ns = inode_userns(inode);
 
-	if (inode->i_op->permission) {
-		ret = inode->i_op->permission(inode, MAY_EXEC, flags);
-		if (likely(!ret))
-			goto ok;
-	} else {
-		ret = acl_permission_check(inode, MAY_EXEC, flags,
-				inode->i_op->check_acl);
-		if (likely(!ret))
-			goto ok;
-		if (ret != -EACCES)
-			return ret;
-		if (ns_capable(ns, CAP_DAC_OVERRIDE) ||
-				ns_capable(ns, CAP_DAC_READ_SEARCH))
-			goto ok;
+int get_write_access(struct inode * inode)
+{
+	spin_lock(&inode->i_lock);
+	if (atomic_read(&inode->i_writecount) < 0) {
+		spin_unlock(&inode->i_lock);
+		return -ETXTBSY;
 	}
-	return ret;
-ok:
-	return security_inode_exec_permission(inode, flags);
+	atomic_inc(&inode->i_writecount);
+	spin_unlock(&inode->i_lock);
+
+	return 0;
+}
+
+int deny_write_access(struct file * file)
+{
+	struct inode *inode = file->f_path.dentry->d_inode;
+
+	spin_lock(&inode->i_lock);
+	if (atomic_read(&inode->i_writecount) > 0) {
+		spin_unlock(&inode->i_lock);
+		return -ETXTBSY;
+	}
+	atomic_dec(&inode->i_writecount);
+	spin_unlock(&inode->i_lock);
+
+	return 0;
 }
 
 /**
@@ -541,6 +549,40 @@ static int complete_walk(struct nameidata *nd)
 
 	path_put(&nd->path);
 	return status;
+}
+
+/*
+ * Short-cut version of permission(), for calling on directories
+ * during pathname resolution.  Combines parts of permission()
+ * and generic_permission(), and tests ONLY for MAY_EXEC permission.
+ *
+ * If appropriate, check DAC only.  If not appropriate, or
+ * short-cut DAC fails, then call ->permission() to do more
+ * complete permission check.
+ */
+static inline int exec_permission(struct inode *inode, unsigned int flags)
+{
+	int ret;
+	struct user_namespace *ns = inode_userns(inode);
+
+	if (inode->i_op->permission) {
+		ret = inode->i_op->permission(inode, MAY_EXEC, flags);
+		if (likely(!ret))
+			goto ok;
+	} else {
+		ret = acl_permission_check(inode, MAY_EXEC, flags,
+				inode->i_op->check_acl);
+		if (likely(!ret))
+			goto ok;
+		if (ret != -EACCES)
+			return ret;
+		if (ns_capable(ns, CAP_DAC_OVERRIDE) ||
+				ns_capable(ns, CAP_DAC_READ_SEARCH))
+			goto ok;
+	}
+	return ret;
+ok:
+	return security_inode_exec_permission(inode, flags);
 }
 
 static __always_inline void set_root(struct nameidata *nd)
