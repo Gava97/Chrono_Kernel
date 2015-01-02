@@ -567,19 +567,19 @@ static inline int exec_permission(struct inode *inode, unsigned int flags)
 
 	if (inode->i_op->permission) {
 		ret = inode->i_op->permission(inode, MAY_EXEC, flags);
-		if (likely(!ret))
-			goto ok;
 	} else {
 		ret = acl_permission_check(inode, MAY_EXEC, flags,
 				inode->i_op->check_acl);
-		if (likely(!ret))
-			goto ok;
-		if (ret != -EACCES)
-			return ret;
-		if (ns_capable(ns, CAP_DAC_OVERRIDE) ||
-				ns_capable(ns, CAP_DAC_READ_SEARCH))
-			goto ok;
 	}
+	if (likely(!ret))
+		goto ok;
+	if (ret == -ECHILD)
+		return ret;
+
+	if (ns_capable(ns, CAP_DAC_OVERRIDE) ||
+			ns_capable(ns, CAP_DAC_READ_SEARCH))
+		goto ok;
+
 	return ret;
 ok:
 	return security_inode_exec_permission(inode, flags);
@@ -1537,7 +1537,7 @@ static int path_init(int dfd, const char *name, unsigned int flags,
 			if (!S_ISDIR(dentry->d_inode->i_mode))
 				goto fput_fail;
 
-			retval = exec_permission(dentry->d_inode, 0);
+			retval = file_permission(file, MAY_EXEC);
 			if (retval)
 				goto fput_fail;
 		}
