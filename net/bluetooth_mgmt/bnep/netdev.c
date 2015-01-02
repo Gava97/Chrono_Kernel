@@ -42,6 +42,8 @@
 
 #include "bnep.h"
 
+#define IFF_TX_SKB_SHARING      0x10000 /* The interface supports sharing
+                                         * skbs on transmit */
 #define BNEP_TX_QUEUE_LEN 20
 
 static int bnep_net_open(struct net_device *dev)

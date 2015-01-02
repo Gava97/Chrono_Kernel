@@ -3,6 +3,8 @@
  *
  * The libusual contains the table of devices common for ub and usb-storage.
  */
+
+#include <linux/export.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/usb.h>

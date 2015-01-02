@@ -16,6 +16,7 @@
  *
  */
 
+#include <linux/module.h>
 #include <linux/cpu.h>
 #include <linux/cpumask.h>
 #include <linux/cpufreq.h>
@@ -129,9 +130,8 @@ static void cpufreq_interactive_timer(unsigned long data)
 	if (!idle_exit_time)
 		goto exit;
 
-	delta_idle = (unsigned int) cputime64_sub(now_idle, time_in_idle);
-	delta_time = (unsigned int) cputime64_sub(pcpu->timer_run_time,
-						  idle_exit_time);
+	delta_idle = now_idle - time_in_idle;
+	delta_time = pcpu->timer_run_time - idle_exit_time;
 
 	/*
 	 * If timer ran less than 1ms after short-term sample started, retry.
@@ -149,10 +149,8 @@ static void cpufreq_interactive_timer(unsigned long data)
 
 		cpu_load = load;
 	}
-	delta_idle = (unsigned int) cputime64_sub(now_idle,
-						pcpu->freq_change_time_in_idle);
-	delta_time = (unsigned int) cputime64_sub(pcpu->timer_run_time,
-						  pcpu->freq_change_time);
+	delta_idle = now_idle - pcpu->freq_change_time_in_idle;
+	delta_time = pcpu->timer_run_time - pcpu->freq_change_time;
 
 	if ((delta_time == 0) || (delta_idle > delta_time))
 		load_since_change = 0;
@@ -200,7 +198,7 @@ static void cpufreq_interactive_timer(unsigned long data)
 	 * minimum sample time.
 	 */
 	if (new_freq < pcpu->target_freq) {
-		if (cputime64_sub(pcpu->timer_run_time, pcpu->freq_change_time)
+		if (pcpu->timer_run_time - pcpu->freq_change_time
 		    < min_sample_time)
 			goto rearm;
 	}

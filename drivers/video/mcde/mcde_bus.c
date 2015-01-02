@@ -9,6 +9,7 @@
  * License terms: GNU General Public License (GPL), version 2.
  */
 
+#include <linux/export.h>
 #include <linux/kernel.h>
 #include <linux/device.h>
 #include <linux/platform_device.h>

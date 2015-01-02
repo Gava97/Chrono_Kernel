@@ -7,6 +7,7 @@
  * published by the Free Software Foundation.
  */
 
+#include <linux/export.h>
 #include <linux/types.h>
 #include <linux/random.h>
 #include <linux/ip.h>

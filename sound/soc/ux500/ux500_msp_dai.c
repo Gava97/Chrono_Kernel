@@ -12,6 +12,8 @@
  * by the Free Software Foundation.
  */
 
+#include <linux/module.h>
+
 #include <linux/slab.h>
 #include <linux/bitops.h>
 #include <linux/platform_device.h>

@@ -11,6 +11,8 @@
  *	it under the terms of the GNU General Public License; either
  *	version 2 of the License, as published by the Free Software Foundation.
  */
+
+#include <linux/module.h>
 #include <linux/list.h>
 #include <linux/proc_fs.h>
 #include <linux/skbuff.h>

@@ -12,6 +12,8 @@
  * by the Free Software Foundation.
  */
 
+#include <linux/module.h>
+
 #include <asm/page.h>
 
 #include <linux/dma-mapping.h>

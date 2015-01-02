@@ -20,6 +20,7 @@
  * 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  */
 
+#include <linux/module.h>
 #include <linux/wait.h>
 #include <linux/fb.h>
 #include <linux/delay.h>
