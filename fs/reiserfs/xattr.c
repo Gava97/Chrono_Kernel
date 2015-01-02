@@ -958,7 +958,7 @@ static int xattr_mount_check(struct super_block *s)
 	return 0;
 }
 
-int reiserfs_permission(struct inode *inode, int mask)
+int reiserfs_permission(struct inode *inode, int mask, unsigned int flags)
 {
 	/*
 	 * We don't do permission checks on the internal objects.
@@ -967,7 +967,7 @@ int reiserfs_permission(struct inode *inode, int mask)
 	if (IS_PRIVATE(inode))
 		return 0;
 
-	return generic_permission(inode, mask);
+	return generic_permission(inode, mask, flags);
 }
 
 static int xattr_hide_revalidate(struct dentry *dentry, struct nameidata *nd)

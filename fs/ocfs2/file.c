@@ -1279,11 +1279,11 @@ bail:
 	return err;
 }
 
-int ocfs2_permission(struct inode *inode, int mask)
+int ocfs2_permission(struct inode *inode, int mask, unsigned int flags)
 {
 	int ret;
 
-	if (mask & MAY_NOT_BLOCK)
+	if (flags & IPERM_FLAG_RCU)
 		return -ECHILD;
 
 	ret = ocfs2_inode_lock(inode, NULL, 0);
@@ -1293,7 +1293,7 @@ int ocfs2_permission(struct inode *inode, int mask)
 		goto out;
 	}
 
-	ret = generic_permission(inode, mask);
+	ret = generic_permission(inode, mask, flags);
 
 	ocfs2_inode_unlock(inode, 0);
 out:

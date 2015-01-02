@@ -77,7 +77,6 @@ static struct super_block *alloc_super(struct file_system_type *type)
 		INIT_HLIST_BL_HEAD(&s->s_anon);
 		INIT_LIST_HEAD(&s->s_inodes);
 		INIT_LIST_HEAD(&s->s_dentry_lru);
-		INIT_LIST_HEAD(&s->s_inode_lru);
 		init_rwsem(&s->s_umount);
 		mutex_init(&s->s_lock);
 		lockdep_set_class(&s->s_umount, &type->s_umount_key);
@@ -658,7 +657,7 @@ static DEFINE_IDA(unnamed_dev_ida);
 static DEFINE_SPINLOCK(unnamed_dev_lock);/* protects the above */
 static int unnamed_dev_start = 0; /* don't bother trying below it */
 
-int get_anon_bdev(dev_t *p)
+int set_anon_super(struct super_block *s, void *data)
 {
 	int dev;
 	int error;
@@ -685,37 +684,23 @@ int get_anon_bdev(dev_t *p)
 		spin_unlock(&unnamed_dev_lock);
 		return -EMFILE;
 	}
-	*p = MKDEV(0, dev & MINORMASK);
+	s->s_dev = MKDEV(0, dev & MINORMASK);
+	s->s_bdi = &noop_backing_dev_info;
 	return 0;
-}
-EXPORT_SYMBOL(get_anon_bdev);
-
-void free_anon_bdev(dev_t dev)
-{
-	int slot = MINOR(dev);
-	spin_lock(&unnamed_dev_lock);
-	ida_remove(&unnamed_dev_ida, slot);
-	if (slot < unnamed_dev_start)
-		unnamed_dev_start = slot;
-	spin_unlock(&unnamed_dev_lock);
-}
-EXPORT_SYMBOL(free_anon_bdev);
-
-int set_anon_super(struct super_block *s, void *data)
-{
-	int error = get_anon_bdev(&s->s_dev);
-	if (!error)
-		s->s_bdi = &noop_backing_dev_info;
-	return error;
 }
 
 EXPORT_SYMBOL(set_anon_super);
 
 void kill_anon_super(struct super_block *sb)
 {
-	dev_t dev = sb->s_dev;
+	int slot = MINOR(sb->s_dev);
+
 	generic_shutdown_super(sb);
-	free_anon_bdev(dev);
+	spin_lock(&unnamed_dev_lock);
+	ida_remove(&unnamed_dev_ida, slot);
+	if (slot < unnamed_dev_start)
+		unnamed_dev_start = slot;
+	spin_unlock(&unnamed_dev_lock);
 }
 
 EXPORT_SYMBOL(kill_anon_super);

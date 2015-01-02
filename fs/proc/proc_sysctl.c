@@ -541,7 +541,7 @@ out:
 	return ret;
 }
 
-static int proc_sys_permission(struct inode *inode, int mask)
+static int proc_sys_permission(struct inode *inode, int mask,unsigned int flags)
 {
 	/*
 	 * sysctl entries that are not writeable,
