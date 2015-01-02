@@ -6,6 +6,7 @@
 #ifndef __SYS_SOC_H
 #define __SYS_SOC_H
 
+#include <linux/stat.h>
 #include <linux/kobject.h>
 
 /**

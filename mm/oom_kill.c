@@ -33,6 +33,8 @@
 #include <linux/security.h>
 #include <linux/ptrace.h>
 
+#include <linux/freezer.h>
+
 int sysctl_panic_on_oom;
 int sysctl_oom_kill_allocating_task;
 int sysctl_oom_dump_tasks = 1;
@@ -321,6 +323,8 @@ static struct task_struct *select_bad_process(unsigned int *ppoints,
 			if (unlikely(frozen(p)))
 				__thaw_task(p);
 			return ERR_PTR(-1UL);
+		}
+		
 		if (!p->mm)
 			continue;
 
