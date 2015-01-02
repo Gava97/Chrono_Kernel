@@ -450,18 +450,12 @@ out:
  *
  * When the next event is more than a tick into the future, stop the idle tick
  * Called when we start the idle loop.
-<<<<<<< HEAD
  *
  * The arch is responsible of calling:
  *
  * - rcu_idle_enter() after its last use of RCU before the CPU is put
  *  to sleep.
  * - rcu_idle_exit() before the first use of RCU after the CPU is woken up.
-=======
- * This also enters into RCU extended quiescent state so that this CPU doesn't
- * need anymore to be part of any global grace period completion. This way
- * the tick can be stopped safely as we don't need to report quiescent states.
->>>>>>> 280f067... nohz: Separate out irq exit and idle loop dyntick logic
  */
 void tick_nohz_idle_enter(void)
 {
@@ -479,10 +473,6 @@ void tick_nohz_idle_enter(void)
 	 */
 	ts->inidle = 1;
 	tick_nohz_stop_sched_tick(ts);
-<<<<<<< HEAD
-=======
-	rcu_idle_enter();
->>>>>>> 280f067... nohz: Separate out irq exit and idle loop dyntick logic
 
 	local_irq_enable();
 }
