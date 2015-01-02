@@ -79,6 +79,15 @@ void unregister_cpu(struct cpu *cpu)
 	return;
 }
 
+struct device *get_cpu_device(unsigned cpu)
+{
+        if (cpu < nr_cpu_ids && cpu_possible(cpu))
+                return per_cpu(cpu_sys_devices, cpu);
+        else
+                return NULL;
+}
+EXPORT_SYMBOL_GPL(get_cpu_device);
+
 #ifdef CONFIG_ARCH_CPU_PROBE_RELEASE
 static ssize_t cpu_probe_store(struct sysdev_class *class,
 			       struct sysdev_class_attribute *attr,
