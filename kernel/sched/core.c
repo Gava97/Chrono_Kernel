@@ -923,14 +923,14 @@ static void update_rq_clock_task(struct rq *rq, s64 delta)
 #ifdef CONFIG_IRQ_TIME_ACCOUNTING
 static int irqtime_account_hi_update(void)
 {
-	struct cpu_usage_stat *cpustat = &kstat_this_cpu.cpustat;
+	u64 *cpustat = kcpustat_this_cpu->cpustat;
 	unsigned long flags;
 	u64 latest_ns;
 	int ret = 0;
 
 	local_irq_save(flags);
 	latest_ns = this_cpu_read(cpu_hardirq_time);
-	if (cputime64_gt(nsecs_to_cputime64(latest_ns), cpustat->irq))
+	if (nsecs_to_cputime64(latest_ns) > cpustat[CPUTIME_IRQ])
 		ret = 1;
 	local_irq_restore(flags);
 	return ret;
@@ -938,14 +938,14 @@ static int irqtime_account_hi_update(void)
 
 static int irqtime_account_si_update(void)
 {
-	struct cpu_usage_stat *cpustat = &kstat_this_cpu.cpustat;
+	u64 *cpustat = kcpustat_this_cpu->cpustat;
 	unsigned long flags;
 	u64 latest_ns;
 	int ret = 0;
 
 	local_irq_save(flags);
 	latest_ns = this_cpu_read(cpu_softirq_time);
-	if (cputime64_gt(nsecs_to_cputime64(latest_ns), cpustat->softirq))
+	if (nsecs_to_cputime64(latest_ns) > cpustat[CPUTIME_SOFTIRQ])
 		ret = 1;
 	local_irq_restore(flags);
 	return ret;
@@ -2693,8 +2693,10 @@ unlock:
 #endif
 
 DEFINE_PER_CPU(struct kernel_stat, kstat);
+DEFINE_PER_CPU(struct kernel_cpustat, kernel_cpustat);
 
 EXPORT_PER_CPU_SYMBOL(kstat);
+EXPORT_PER_CPU_SYMBOL(kernel_cpustat);
 
 /*
  * Return any ns on the sched_clock that have not yet been accounted in
@@ -2792,20 +2794,14 @@ static inline void task_group_account_field(struct task_struct *p, int index,
 void account_user_time(struct task_struct *p, cputime_t cputime,
 		       cputime_t cputime_scaled)
 {
-	struct cpu_usage_stat *cpustat = &kstat_this_cpu.cpustat;
-	cputime64_t tmp;
+	int index;
 
 	/* Add user time to process. */
 	p->utime += cputime;
 	p->utimescaled += cputime_scaled;
 	account_group_user_time(p, cputime);
 
-	/* Add user time to cpustat. */
-	tmp = cputime_to_cputime64(cputime);
-	if (TASK_NICE(p) > 0)
-		cpustat->nice = cputime64_add(cpustat->nice, tmp);
-	else
-		cpustat->user = cputime64_add(cpustat->user, tmp);
+	index = (TASK_NICE(p) > 0) ? CPUTIME_NICE : CPUTIME_USER;
 
 	/* Add user time to cpustat. */
 	task_group_account_field(p, index, (__force u64) cputime);
@@ -2823,8 +2819,7 @@ void account_user_time(struct task_struct *p, cputime_t cputime,
 static void account_guest_time(struct task_struct *p, cputime_t cputime,
 			       cputime_t cputime_scaled)
 {
-	cputime64_t tmp;
-	struct cpu_usage_stat *cpustat = &kstat_this_cpu.cpustat;
+	u64 *cpustat = kcpustat_this_cpu->cpustat;
 
 	/* Add guest time to process. */
 	p->utime += cputime;
@@ -2834,11 +2829,11 @@ static void account_guest_time(struct task_struct *p, cputime_t cputime,
 
 	/* Add guest time to cpustat. */
 	if (TASK_NICE(p) > 0) {
-		cpustat->nice = cputime64_add(cpustat->nice, tmp);
-		cpustat->guest_nice = cputime64_add(cpustat->guest_nice, tmp);
+		cpustat[CPUTIME_NICE] += (__force u64) cputime;
+		cpustat[CPUTIME_GUEST_NICE] += (__force u64) cputime;
 	} else {
-		cpustat->user = cputime64_add(cpustat->user, tmp);
-		cpustat->guest = cputime64_add(cpustat->guest, tmp);
+		cpustat[CPUTIME_USER] += (__force u64) cputime;
+		cpustat[CPUTIME_GUEST] += (__force u64) cputime;
 	}
 }
 
@@ -2851,18 +2846,15 @@ static void account_guest_time(struct task_struct *p, cputime_t cputime,
  */
 static inline
 void __account_system_time(struct task_struct *p, cputime_t cputime,
-			cputime_t cputime_scaled, cputime64_t *target_cputime64)
+			cputime_t cputime_scaled, int index)
 {
-	cputime64_t tmp = cputime_to_cputime64(cputime);
-
 	/* Add system time to process. */
 	p->stime += cputime;
 	p->stimescaled += cputime_scaled;
 	account_group_system_time(p, cputime);
 
 	/* Add system time to cpustat. */
-	*target_cputime64 = cputime64_add(*target_cputime64, tmp);
-	cpuacct_update_stats(p, CPUACCT_STAT_SYSTEM, cputime);
+	task_group_account_field(p, index, (__force u64) cputime);
 
 	/* Account for system time used */
 	acct_update_integrals(p);
@@ -2878,8 +2870,7 @@ void __account_system_time(struct task_struct *p, cputime_t cputime,
 void account_system_time(struct task_struct *p, int hardirq_offset,
 			 cputime_t cputime, cputime_t cputime_scaled)
 {
-	struct cpu_usage_stat *cpustat = &kstat_this_cpu.cpustat;
-	cputime64_t *target_cputime64;
+	int index;
 
 	if ((p->flags & PF_VCPU) && (irq_count() - hardirq_offset == 0)) {
 		account_guest_time(p, cputime, cputime_scaled);
@@ -2887,13 +2878,13 @@ void account_system_time(struct task_struct *p, int hardirq_offset,
 	}
 
 	if (hardirq_count() - hardirq_offset)
-		target_cputime64 = &cpustat->irq;
+		index = CPUTIME_IRQ;
 	else if (in_serving_softirq())
-		target_cputime64 = &cpustat->softirq;
+		index = CPUTIME_SOFTIRQ;
 	else
-		target_cputime64 = &cpustat->system;
+		index = CPUTIME_SYSTEM;
 
-	__account_system_time(p, cputime, cputime_scaled, target_cputime64);
+	__account_system_time(p, cputime, cputime_scaled, index);
 }
 
 /*
@@ -2902,10 +2893,9 @@ void account_system_time(struct task_struct *p, int hardirq_offset,
  */
 void account_steal_time(cputime_t cputime)
 {
-	struct cpu_usage_stat *cpustat = &kstat_this_cpu.cpustat;
-	cputime64_t cputime64 = cputime_to_cputime64(cputime);
+	u64 *cpustat = kcpustat_this_cpu->cpustat;
 
-	cpustat->steal = cputime64_add(cpustat->steal, cputime64);
+	cpustat[CPUTIME_STEAL] += (__force u64) cputime;
 }
 
 /*
@@ -2914,14 +2904,13 @@ void account_steal_time(cputime_t cputime)
  */
 void account_idle_time(cputime_t cputime)
 {
-	struct cpu_usage_stat *cpustat = &kstat_this_cpu.cpustat;
-	cputime64_t cputime64 = cputime_to_cputime64(cputime);
+	u64 *cpustat = kcpustat_this_cpu->cpustat;
 	struct rq *rq = this_rq();
 
 	if (atomic_read(&rq->nr_iowait) > 0)
-		cpustat->iowait = cputime64_add(cpustat->iowait, cputime64);
+		cpustat[CPUTIME_IOWAIT] += (__force u64) cputime;
 	else
-		cpustat->idle = cputime64_add(cpustat->idle, cputime64);
+		cpustat[CPUTIME_IDLE] += (__force u64) cputime;
 }
 
 static __always_inline bool steal_account_process_tick(void)
@@ -2971,16 +2960,15 @@ static void irqtime_account_process_tick(struct task_struct *p, int user_tick,
 						struct rq *rq)
 {
 	cputime_t one_jiffy_scaled = cputime_to_scaled(cputime_one_jiffy);
-	cputime64_t tmp = cputime_to_cputime64(cputime_one_jiffy);
-	struct cpu_usage_stat *cpustat = &kstat_this_cpu.cpustat;
+	u64 *cpustat = kcpustat_this_cpu->cpustat;
 
 	if (steal_account_process_tick())
 		return;
 
 	if (irqtime_account_hi_update()) {
-		cpustat->irq = cputime64_add(cpustat->irq, tmp);
+		cpustat[CPUTIME_IRQ] += (__force u64) cputime_one_jiffy;
 	} else if (irqtime_account_si_update()) {
-		cpustat->softirq = cputime64_add(cpustat->softirq, tmp);
+		cpustat[CPUTIME_SOFTIRQ] += (__force u64) cputime_one_jiffy;
 	} else if (this_cpu_ksoftirqd() == p) {
 		/*
 		 * ksoftirqd time do not get accounted in cpu_softirq_time.
@@ -2988,7 +2976,7 @@ static void irqtime_account_process_tick(struct task_struct *p, int user_tick,
 		 * Also, p->stime needs to be updated for ksoftirqd.
 		 */
 		__account_system_time(p, cputime_one_jiffy, one_jiffy_scaled,
-					&cpustat->softirq);
+					CPUTIME_SOFTIRQ);
 	} else if (user_tick) {
 		account_user_time(p, cputime_one_jiffy, one_jiffy_scaled);
 	} else if (p == rq->idle) {
@@ -2997,7 +2985,7 @@ static void irqtime_account_process_tick(struct task_struct *p, int user_tick,
 		account_guest_time(p, cputime_one_jiffy, one_jiffy_scaled);
 	} else {
 		__account_system_time(p, cputime_one_jiffy, one_jiffy_scaled,
-					&cpustat->system);
+					CPUTIME_SYSTEM);
 	}
 }
 
