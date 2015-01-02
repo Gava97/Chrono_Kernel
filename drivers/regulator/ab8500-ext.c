@@ -12,6 +12,8 @@
  * ab8500-ext supports the following regulators:
  * - VextSupply3
  */
+
+#include <linux/module.h>
 #include <linux/init.h>
 #include <linux/kernel.h>
 #include <linux/err.h>

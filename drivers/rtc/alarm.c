@@ -22,6 +22,7 @@
 #include <linux/sched.h>
 #include <linux/spinlock.h>
 #include <linux/sysdev.h>
+#include <linux/module.h>
 #include <linux/wakelock.h>
 
 #if defined(CONFIG_MACH_SEC_GOLDEN_CHN) || defined(CONFIG_MACH_JANICE_CHN) || defined(CONFIG_MACH_CODINA_CHN) || defined (CONFIG_MACH_GAVINI_CHN)

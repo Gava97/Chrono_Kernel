@@ -7,6 +7,7 @@
  * Author: Rabin Vincent <rabin.vincent@stericsson.com> for ST-Ericsson
  */
 
+#include <linux/export.h>
 #include <linux/gpio.h>
 #include <linux/kernel.h>
 #include <linux/interrupt.h>

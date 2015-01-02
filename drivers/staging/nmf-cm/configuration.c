@@ -10,6 +10,8 @@
  *
  */
 
+#include <linux/module.h>
+
 #include "osal-kernel.h"
 #include <cm/engine/api/configuration_engine.h>
 #include <cm/engine/configuration/inc/configuration_status.h>

@@ -10,6 +10,7 @@
  * published by the Free Software Foundation.
  */
 
+#include <linux/export.h>
 #include <linux/platform_device.h>
 #include <linux/init.h>
 #include <linux/earlysuspend.h>
@@ -20,6 +21,7 @@
 #include <linux/kthread.h>
 #include <linux/sched.h>
 #include <linux/delay.h>
+#include <linux/stat.h>
 #ifdef CONFIG_GENERIC_BLN_USE_WAKELOCK
 #include <linux/wakelock.h>
 #endif

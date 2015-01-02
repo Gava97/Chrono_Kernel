@@ -353,7 +353,7 @@ static void dbs_check_cpu(struct cpu_dbs_info_s *this_dbs_info)
 
 		cur_idle_time = get_cpu_idle_time(j, &cur_wall_time);
 
-		wall_time = cur_wall_time - j_dbs_info->prev_cpu_wall);
+		wall_time = cur_wall_time - j_dbs_info->prev_cpu_wall;
 		j_dbs_info->prev_cpu_wall = cur_wall_time;
 
 		idle_time = cur_idle_time - j_dbs_info->prev_cpu_idle;

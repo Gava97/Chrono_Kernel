@@ -21,6 +21,7 @@
 #include <linux/slab.h>
 #include <linux/mm.h>
 #include <linux/dma-mapping.h>
+#include <linux/stat.h>
 #include <linux/spinlock.h>
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3,1,0)
 #include <linux/shrinker.h>

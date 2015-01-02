@@ -8,6 +8,9 @@
  * on U8500 which uses Shared Memroy as IPC between Application
  * Processor and Modem processor.
  */
+
+#include <linux/export.h>
+#include <linux/notifier.h>
 #include <linux/modem/modem.h>
 #include <linux/platform_device.h>
 #include <linux/err.h>

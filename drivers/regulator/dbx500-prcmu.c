@@ -8,6 +8,7 @@
  * UX500 common part of Power domain regulators
  */
 
+#include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/err.h>
 #include <linux/regulator/driver.h>
