@@ -376,6 +376,7 @@ struct inodes_stat_t {
 
 #include <linux/linkage.h>
 #include <linux/wait.h>
+#include <linux/types.h>
 #include <linux/kdev_t.h>
 #include <linux/dcache.h>
 #include <linux/path.h>
@@ -968,6 +969,7 @@ struct file {
 #ifdef CONFIG_EPOLL
 	/* Used by fs/eventpoll.c to link all the hooks to this file */
 	struct list_head	f_ep_links;
+	struct list_head	f_tfile_llink;
 #endif /* #ifdef CONFIG_EPOLL */
 	struct address_space	*f_mapping;
 #ifdef CONFIG_DEBUG_WRITECOUNT
@@ -1453,6 +1455,10 @@ enum {
 #define vfs_check_frozen(sb, level) \
 	wait_event((sb)->s_wait_unfrozen, ((sb)->s_frozen < (level)))
 
+#define get_fs_excl() atomic_inc(&current->fs_excl)
+#define put_fs_excl() atomic_dec(&current->fs_excl)
+#define has_fs_excl() atomic_read(&current->fs_excl)
+
 /*
  * until VFS tracks user namespaces for inodes, just make all files
  * belong to init_user_ns
@@ -1574,7 +1580,7 @@ struct inode_operations {
 	struct dentry * (*lookup) (struct inode *,struct dentry *, struct nameidata *);
 	void * (*follow_link) (struct dentry *, struct nameidata *);
 	int (*permission) (struct inode *, int, unsigned int);
-	int (*check_acl)(struct inode *, int);
+	int (*check_acl)(struct inode *, int, unsigned int);
 
 	int (*readlink) (struct dentry *, char __user *,int);
 	void (*put_link) (struct dentry *, struct nameidata *, void *);
@@ -1603,10 +1609,9 @@ struct inode_operations {
 struct seq_file;
 
 ssize_t rw_copy_check_uvector(int type, const struct iovec __user * uvector,
-			      unsigned long nr_segs, unsigned long fast_segs,
-			      struct iovec *fast_pointer,
-			      struct iovec **ret_pointer,
-			      int check_access);
+				unsigned long nr_segs, unsigned long fast_segs,
+				struct iovec *fast_pointer,
+				struct iovec **ret_pointer);
 
 extern ssize_t vfs_read(struct file *, char __user *, size_t, loff_t *);
 extern ssize_t vfs_write(struct file *, const char __user *, size_t, loff_t *);
@@ -1878,6 +1883,7 @@ extern int fd_statfs(int, struct kstatfs *);
 extern int statfs_by_dentry(struct dentry *, struct kstatfs *);
 extern int freeze_super(struct super_block *super);
 extern int thaw_super(struct super_block *super);
+extern bool our_mnt(struct vfsmount *mnt);
 
 extern int current_umask(void);
 

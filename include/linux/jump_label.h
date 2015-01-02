@@ -66,7 +66,7 @@ extern void jump_label_rate_limit(struct jump_label_key_deferred *key,
 
 #else  /* !HAVE_JUMP_LABEL */
 
-#include <linux/atomic.h>
+#include <asm/atomic.h>
 
 #define JUMP_LABEL_INIT {ATOMIC_INIT(0)}
 

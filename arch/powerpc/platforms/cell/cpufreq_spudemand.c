@@ -25,7 +25,7 @@
 #include <linux/module.h>
 #include <linux/timer.h>
 #include <linux/workqueue.h>
-#include <linux/atomic.h>
+#include <asm/atomic.h>
 #include <asm/machdep.h>
 #include <asm/spu.h>
 
