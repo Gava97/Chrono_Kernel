@@ -39,7 +39,6 @@
 
 #define MALI_HIGH_TO_LOW_LEVEL_UTILIZATION_LIMIT 64
 #define MALI_LOW_TO_HIGH_LEVEL_UTILIZATION_LIMIT 192
-#define MALI_APE25OPP_UTILIZATION_LIMIT 70
 #define MALI_APE50OPP_UTILIZATION_LIMIT 80
 #define MALI_APE100OPP_UTILIZATION_LIMIT 100
 
@@ -99,9 +98,11 @@ static struct mali_dvfs_data mali_dvfs[] = {
 int mali_utilization_high_to_low = MALI_HIGH_TO_LOW_LEVEL_UTILIZATION_LIMIT;
 int mali_utilization_low_to_high = MALI_LOW_TO_HIGH_LEVEL_UTILIZATION_LIMIT;
 
-static bool mali_opp_enable = false;
+static int apeopp_force_limit = 0; // limit max ape/ddr opp irrespectively of Mali utilization
+static int ddropp_force_limit = 0;
 
-static int ape_25_opp_utilization_limit = MALI_APE25OPP_UTILIZATION_LIMIT;
+static bool mali_opp_enable = false; // when enabled, mali will require APE50/APE100, respectively of set utilization limit
+static int current_apeopp = 50;
 static int ape_50_opp_utilization_limit = MALI_APE50OPP_UTILIZATION_LIMIT;
 static int ape_100_opp_utilization_limit = MALI_APE100OPP_UTILIZATION_LIMIT;
 
@@ -351,18 +352,51 @@ void mali_utilization_function(struct work_struct *ptr)
 	MALI_DEBUG_PRINT(5, ("MALI GPU utilization: %u\n", mali_last_utilization));
 
 	mutex_lock(&mali_boost_lock);
+	
+	if (mali_opp_enable) {
+		/* 
+		 * We set higher APE_OPP according to mali load, 
+		 * but won't set lowered values if already reached higher OPP.
+		 */
+		
+		if (mali_last_utilization > ape_100_opp_utilization_limit && current_apeopp != 100) {
+			prcmu_qos_update_requirement(PRCMU_QOS_APE_OPP, "mali", PRCMU_QOS_MAX_VALUE);
+			current_apeopp = 100;
+		} else if (mali_last_utilization > ape_50_opp_utilization_limit && current_apeopp != 50) {
+			prcmu_qos_update_requirement(PRCMU_QOS_APE_OPP, "mali", (signed char) 50);
+			current_apeopp = 50;
+		}
+	}
+	
 	if ((!boost_required && !boost_working && !boost_scheduled) || !boost_enable) {
 		// consider power saving mode (APE_50_OPP) only if we're not on boost
 		if (mali_last_utilization > mali_utilization_low_to_high) {
 			if (has_requested_low) {
 				MALI_DEBUG_PRINT(5, ("MALI GPU utilization: %u SIGNAL_HIGH\n", mali_last_utilization));
-				/*Request 100% APE_OPP.*/
-				prcmu_qos_update_requirement(PRCMU_QOS_APE_OPP, "mali", PRCMU_QOS_MAX_VALUE);
+				
 				/*
-				* Since the utilization values will be reported higher
-				* if DDR_OPP is lowered, we also request 100% DDR_OPP.
-				*/
-				prcmu_qos_update_requirement(PRCMU_QOS_DDR_OPP, "mali", PRCMU_QOS_MAX_VALUE);
+				 * We limit APE/DDR to values that set in ape/ddropp_force_limit
+				 */
+				
+				if ((apeopp_force_limit == 100) || (!apeopp_force_limit)) {
+					prcmu_qos_update_requirement(PRCMU_QOS_APE_OPP, "mali", PRCMU_QOS_MAX_VALUE);
+					current_apeopp = 100;
+				} else {
+					prcmu_qos_update_requirement(PRCMU_QOS_APE_OPP, "mali", 
+									(signed char)apeopp_force_limit);
+					current_apeopp = apeopp_force_limit;
+				}
+
+				/*
+				 * Since the utilization values will be reported higher
+				 * if DDR_OPP is lowered, we also request higher DDR_OPP.
+				 */
+				if ((ddropp_force_limit == 100) || (!ddropp_force_limit))
+					prcmu_qos_update_requirement(PRCMU_QOS_DDR_OPP, "mali", PRCMU_QOS_MAX_VALUE);
+				else 
+					prcmu_qos_update_requirement(PRCMU_QOS_DDR_OPP, "mali", 
+								(signed char)ddropp_force_limit);
+
 				has_requested_low = 0;
 				mutex_unlock(&mali_boost_lock);
 				return;		//After we switch to APE_100_OPP we want to measure utilization once again before entering boost logic
@@ -374,6 +408,7 @@ void mali_utilization_function(struct work_struct *ptr)
 						/*Remove APE_OPP and DDR_OPP requests*/
 						prcmu_qos_update_requirement(PRCMU_QOS_DDR_OPP, "mali", PRCMU_QOS_DEFAULT_VALUE);
 						prcmu_qos_update_requirement(PRCMU_QOS_APE_OPP, "mali", PRCMU_QOS_DEFAULT_VALUE);
+						current_apeopp = 25;
 						MALI_DEBUG_PRINT(5, ("MALI GPU utilization: %u SIGNAL_LOW\n", mali_last_utilization));
 						has_requested_low = 1;
 					}
@@ -381,12 +416,8 @@ void mali_utilization_function(struct work_struct *ptr)
 			} else {
 				if (!has_requested_low) {
 					prcmu_qos_update_requirement(PRCMU_QOS_DDR_OPP, "mali", PRCMU_QOS_DEFAULT_VALUE);
-					if (mali_last_utilization > ape_100_opp_utilization_limit) {
-						prcmu_qos_update_requirement(PRCMU_QOS_APE_OPP, "mali", PRCMU_QOS_MAX_VALUE);
-					} else if (mali_last_utilization > ape_50_opp_utilization_limit)  {
-						prcmu_qos_update_requirement(PRCMU_QOS_APE_OPP, "mali", (signed char) 50);
-					} else 
-						prcmu_qos_update_requirement(PRCMU_QOS_APE_OPP, "mali", PRCMU_QOS_DEFAULT_VALUE);
+					prcmu_qos_update_requirement(PRCMU_QOS_APE_OPP, "mali", PRCMU_QOS_DEFAULT_VALUE);
+					current_apeopp = 25;
 					
 					MALI_DEBUG_PRINT(5, ("MALI GPU utilization: %u SIGNAL_LOW\n", mali_last_utilization));
 					has_requested_low = 1;
@@ -760,7 +791,6 @@ static ssize_t mali_opp_show(struct kobject *kobj, struct kobj_attribute *attr, 
 {
 	sprintf(buf, "%sStatus=%s\n", buf, mali_opp_enable ? "on" : "off");
 	sprintf(buf, "%sMali utilization thresholds:\n", buf);
-	sprintf(buf, "%sape25opp=%d\n", buf, ape_25_opp_utilization_limit);
 	sprintf(buf, "%sape50opp=%d\n", buf, ape_50_opp_utilization_limit);
 	sprintf(buf, "%sape100opp=%d\n", buf, ape_100_opp_utilization_limit);
 	
@@ -793,15 +823,60 @@ static ssize_t mali_opp_store(struct kobject *kobj, struct kobj_attribute *attr,
 		return count;
 	}
 
-	if (sscanf(buf, "ape25opp=%u", &val)) {
-		ape_25_opp_utilization_limit = val;
+	return -EINVAL;
+}
+ATTR_RW(mali_opp);
+
+static ssize_t mali_opp_force_limit_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
+{
+	sprintf(buf, "%sAPE/DDR OPPs (0 if disabled):\n", buf);
+	sprintf(buf, "%sapeopp=%d\n", buf, apeopp_force_limit);
+	sprintf(buf, "%sddropp=%d\n", buf, ddropp_force_limit);
+	
+	return strlen(buf);
+}
+
+static ssize_t mali_opp_force_limit_store(struct kobject *kobj, struct kobj_attribute *attr, const char *buf, size_t count)
+{
+	int val;
+
+	if (sscanf(buf, "apeopp=%u", &val)) {
+		if (val != 0 && val != 25 && val != 50 && val != 100) {
+			pr_err("[mali] wrong apeopp value %d at %s", val, __func__);
+			return -EINVAL;
+		}
+		apeopp_force_limit = val;
+
+		return count;
+	}
+
+	if (sscanf(buf, "ddropp=%u", &val)) {
+	  	if (val != 0 && val != 25 && val != 50 && val != 100) {
+			pr_err("[mali] wrong ddropp value %d at %s", val, __func__);
+			return -EINVAL;
+		}
+		ddropp_force_limit = val;
 
 		return count;
 	}
 
 	return -EINVAL;
 }
-ATTR_RW(mali_opp);
+ATTR_RW(mali_opp_force_limit);
+
+static ssize_t mali_debug_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
+{
+	sprintf(buf, "%spll = %#010x\n", buf, prcmu_read(PRCMU_PLLSOC0));
+	sprintf(buf, "%scurrent_apeopp=%d\n", buf, current_apeopp);
+	sprintf(buf, "%sape_opp = %s\n", buf, 
+		(prcmu_get_ape_opp() == APE_100_OPP) ? "100" : "50");
+	sprintf(buf, "%sddr_opp = %s\n", buf, 
+		(prcmu_get_ddr_opp() == DDR_100_OPP) ? "100" :
+		((prcmu_get_ddr_opp() == DDR_50_OPP) ? "50" : "25"));
+
+	return strlen(buf);
+}
+ATTR_RO(mali_debug);
 
 static struct attribute *mali_attrs[] = {
 	&version_interface.attr, 
@@ -817,6 +892,8 @@ static struct attribute *mali_attrs[] = {
 	&mali_dvfs_config_interface.attr, 
 	&mali_available_frequencies_interface.attr, 
 	&mali_opp_interface.attr,
+	&mali_opp_force_limit_interface.attr,
+	&mali_debug_interface.attr,
 	NULL,
 };
 
